@@ -1,0 +1,26 @@
+# segredos — nunca comitar
+.env
+.env.*
+!.env.example
+
+# config de identidade do tenant (cada instalação tem o seu, não é código)
+config/tenant_config.yaml
+
+# bancos locais (dado de demo é gerado por script, não versionado)
+*.sqlite
+*.sqlite3
+*.db
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.log
+
+# node (se algum dia o frontend ganhar build)
+node_modules/
+
+# editor/os
+.DS_Store
+.vscode/

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Login — Vendalytics</title>
+<link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+<div class="tela-login">
+  <form class="card-login" id="form-login">
+    <h1 data-tenant-nome>Vendalytics</h1>
+    <p>Entre com seu e-mail e senha</p>
+    <input type="email" id="email" placeholder="E-mail" required autofocus/>
+    <input type="password" id="senha" placeholder="Senha" required/>
+    <button type="submit">Entrar</button>
+    <div class="erro" id="erro"></div>
+  </form>
+</div>
+<script src="branding.js"></script>
+<script>
+document.getElementById("form-login").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const email = document.getElementById("email").value.trim();
+  const senha = document.getElementById("senha").value;
+  const erroEl = document.getElementById("erro");
+  erroEl.textContent = "";
+  try {
+    const r = await fetch("/api/auth/login", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({email, senha}),
+    });
+    if (!r.ok) { erroEl.textContent = "E-mail ou senha inválidos."; return; }
+    const d = await r.json();
+    localStorage.setItem("vendalytics_token", d.token);
+    localStorage.setItem("vendalytics_user", JSON.stringify(d));
+    location.href = "index.html";
+  } catch (e) {
+    erroEl.textContent = "Erro ao conectar: " + e.message;
+  }
+});
+</script>
+</body>
+</html>

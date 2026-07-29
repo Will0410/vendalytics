@@ -1,0 +1,102 @@
+"""
+main.py — API do Vendalytics. Esqueleto enxuto de propósito (Fase 1 do
+plano): auth, branding do tenant, mapa de clientes e dashboard de métricas,
+todos servidos a partir do adapter configurado (sqlite_reference por padrão,
+populado por demo_data/seed.py com dado 100% sintético).
+"""
+from __future__ import annotations
+
+import logging
+from pathlib import Path
+
+from fastapi import Depends, FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+
+from . import auth, config, data_layer, tenant
+from .modules import metrics
+
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger("vendalytics")
+
+app = FastAPI(title="Vendalytics")
+app.add_middleware(
+    CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+
+
+@app.on_event("startup")
+def _startup():
+    auth.garantir_admin()
+    if not data_layer.disponivel():
+        log.warning(
+            "Fonte de dados sem dado carregado — rode "
+            "`python -m demo_data.seed` para gerar a base de demonstração.")
+
+
+# ── auth ──────────────────────────────────────────────────────────────
+class LoginReq(BaseModel):
+    email: str
+    senha: str
+
+
+@app.post("/api/auth/login")
+def login(body: LoginReq):
+    return auth.autenticar(body.email, body.senha)
+
+
+@app.get("/api/auth/me")
+def me(user: dict = Depends(auth.get_current_user)):
+    return user
+
+
+# ── identidade/branding do tenant ───────────────────────────────────────
+@app.get("/api/tenant/branding")
+def branding():
+    return tenant.carregar().branding_publico()
+
+
+# ── clientes / mapa ──────────────────────────────────────────────────
+@app.get("/api/clientes")
+def clientes(bbox: str = "", texto: str = "", filial: str = "",
+            limit: int = 2000, offset: int = 0, user: dict = Depends(auth.get_current_user)):
+    bb = None
+    if bbox:
+        partes = [float(x) for x in bbox.split(",")]
+        if len(partes) == 4:
+            bb = tuple(partes)
+    return data_layer.query_clientes(bbox=bb, texto=texto, filial=filial, limit=limit, offset=offset)
+
+
+@app.get("/api/clientes/{customer_id}")
+def cliente_detalhe(customer_id: str, user: dict = Depends(auth.get_current_user)):
+    c = data_layer.cliente(customer_id)
+    if not c:
+        return {"erro": "não encontrado"}
+    c["pedidos_recentes"] = data_layer.pedidos_recentes(customer_id)
+    c["mix_produtos"] = data_layer.mix_produtos_cliente(customer_id)
+    c["roteiro"] = data_layer.roteiro_visitas(customer_id)
+    return c
+
+
+# ── métricas / dashboard ────────────────────────────────────────────────
+@app.get("/api/metrics/dashboard")
+def dashboard(filial: str = "", user: dict = Depends(auth.get_current_user)):
+    return metrics.dashboard(filial=filial)
+
+
+@app.get("/api/vendedores")
+def vendedores(filial: str = "", user: dict = Depends(auth.get_current_user)):
+    return {"vendedores": data_layer.vendedores(filial=filial)}
+
+
+# ── diagnóstico (sem auth — health check simples) ───────────────────────
+@app.get("/api/health")
+def health():
+    return {"ok": True, "adapter": config.ADAPTER_ATIVO, "dado_disponivel": data_layer.disponivel()}
+
+
+# ── frontend estático ────────────────────────────────────────────────────
+FRONTEND_DIR = config.PROJECT_ROOT / "frontend"
+if FRONTEND_DIR.exists():
+    app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")

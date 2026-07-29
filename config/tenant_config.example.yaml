@@ -1,0 +1,62 @@
+# tenant_config.yaml — identidade de UMA instalação do Vendalytics.
+# Copie este arquivo para tenant_config.yaml (fora do git — cada cliente tem o seu)
+# e ajuste os valores. Nada aqui é lido do código: main.py/tenant.py só sabem ler
+# este formato, o CONTEÚDO é sempre específico do cliente.
+
+empresa:
+  nome: "Distribuidora Exemplo"
+  nome_curto: "Exemplo"
+  cor_primaria: "#2563eb"
+  cor_secundaria: "#f59e0b"
+  logo_path: "/static/logo.png"
+  admin_email: "admin@exemplo.com"
+
+filiais:
+  - sigla: "F1"
+    nome: "Filial Norte"
+  - sigla: "F2"
+    nome: "Filial Sul"
+
+# Grupos de segmentação (CNAE) — cada distribuidora vende para um recorte de
+# ramos diferente (alimentício, farmacêutico, material de construção...).
+# "prefixos" são os 4 primeiros dígitos do CNAE (classe), "padrao" marca os
+# grupos usados quando a prospecção não consegue inferir o perfil do vendedor.
+segmentacao:
+  grupos_cnae:
+    mercados:
+      nome: "Mercados/Mercearias"
+      prefixos: ["4711", "4712"]
+      padrao: true
+    padarias:
+      nome: "Padarias/Confeitarias"
+      prefixos: ["4721"]
+      padrao: true
+    farmacias:
+      nome: "Farmácias/Drogarias"
+      prefixos: ["4771"]
+      padrao: false
+  # Usado para casar o RAMO cadastral (texto livre) de um cliente a um
+  # grupo de segmentação, via regex.
+  grupos_por_ramo_regex:
+    "Mercados/Mercearias": "MERCADO|SUPERMERC|MERCEARIA"
+    "Padarias/Confeitarias": "PADARIA|CONFEITARIA"
+    "Farmácias/Drogarias": "FARMACIA|DROGARIA"
+
+# Prompt do assistente de IA — {{variáveis}} são preenchidas em runtime por
+# tenant.py a partir de dados reais (contagem de clientes/filiais etc.).
+assistente_ia:
+  system_prompt_template: >
+    Você é o assistente comercial da {{empresa_nome}}: cerca de
+    {{total_clientes}} clientes ativos em {{total_filiais}} filiais.
+    Responda de forma objetiva, baseada só nos dados fornecidos — nunca
+    invente números.
+
+# Textos do bot de WhatsApp (menu do vendedor/cliente) — branding e nome
+# do canal configuráveis por tenant, nunca hardcoded no código.
+whatsapp_bot:
+  nome_canal: "Central de Vendas"
+  boas_vindas: "Olá! Bem-vindo à Central de Vendas de {{empresa_nome}}."
+  menu_vendedor:
+    - "📍 Meu roteiro de hoje"
+    - "🎯 Minhas oportunidades de mix"
+    - "📊 Minhas metas"

@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Painel — Vendalytics</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+<div class="topo">
+  <span class="logo" data-tenant-nome>Vendalytics</span>
+  <div class="nav">
+    <a href="index.html" class="on">Mapa &amp; Métricas</a>
+    <a href="#" id="btn-sair">Sair</a>
+  </div>
+</div>
+<div class="kpis" id="kpis"><div class="kpi"><b>…</b><span>carregando</span></div></div>
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="branding.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
