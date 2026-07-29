@@ -7,6 +7,7 @@ populado por demo_data/seed.py com dado 100% sintético).
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 
 from fastapi import Depends, FastAPI
@@ -94,6 +95,15 @@ def vendedores(filial: str = "", user: dict = Depends(auth.get_current_user)):
 @app.get("/api/health")
 def health():
     return {"ok": True, "adapter": config.ADAPTER_ATIVO, "dado_disponivel": data_layer.disponivel()}
+
+
+# Endpoint de debug seguro (ativa apenas em DEMO_MODE). Retorna apenas se o
+# `JWT_SECRET` está presente e o tamanho do valor, sem revelar o segredo.
+if config.DEMO_MODE:
+    @app.get("/internal/debug/jwt")
+    def _debug_jwt():
+        v = os.getenv("JWT_SECRET", "") or ""
+        return {"jwt_present": bool(v.strip()), "jwt_length": len(v.strip())}
 
 
 # ── frontend estático ────────────────────────────────────────────────────
