@@ -66,11 +66,19 @@ def garantir_admin() -> None:
     if _tem_usuarios():
         return
     t = tenant.carregar()
-    senha = secrets.token_urlsafe(12)
-    criar_usuario(t.admin_email, senha, nome="Administrador", role="admin")
+    admin_email = config.ADMIN_EMAIL or t.admin_email
+    senha = config.ADMIN_PASSWORD
+    if config.ADMIN_EMAIL and not senha:
+        log.warning(
+            "ADMIN_EMAIL definido sem ADMIN_PASSWORD — gerando senha aleatória."
+        )
+        senha = secrets.token_urlsafe(12)
+    if not senha:
+        senha = secrets.token_urlsafe(12)
+    criar_usuario(admin_email, senha, nome="Administrador", role="admin")
     log.warning(
         "Nenhum usuário existia — admin criado automaticamente:\n"
-        f"  e-mail: {t.admin_email}\n  senha:  {senha}\n"
+        f"  e-mail: {admin_email}\n  senha:  {senha}\n"
         "Troque essa senha assim que fizer login (guarde-a agora, não será"
         " mostrada de novo).")
 

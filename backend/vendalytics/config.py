@@ -54,4 +54,7 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
 WHAPI_TOKEN = os.getenv("WHAPI_TOKEN", "").strip()
 WHAPI_WEBHOOK_SECRET = os.getenv("WHAPI_WEBHOOK_SECRET", "").strip()
 
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "").strip()
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "").strip()
+
 USERS_DB_PATH = PROJECT_ROOT / "usuarios.sqlite"
