@@ -29,6 +29,10 @@ app.add_middleware(
 @app.on_event("startup")
 def _startup():
     auth.garantir_admin()
+    # Log seguro: não imprimir valores sensíveis, apenas presença/contagem
+    jwt_present = bool((os.getenv("JWT_SECRET") or "").strip())
+    env_keys = [k for k in os.environ.keys() if k in ("JWT_SECRET",) or k.endswith("SECRET") or k.endswith("_KEY")]
+    log.info("Startup env check: JWT_SECRET present=%s, keys_found=%s", jwt_present, env_keys)
     if not data_layer.disponivel():
         log.warning(
             "Fonte de dados sem dado carregado — rode "
