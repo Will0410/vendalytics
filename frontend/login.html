@@ -7,16 +7,26 @@
 <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
+<canvas id="bg-canvas"></canvas>
+<div class="bg-gradient"></div>
+
 <div class="tela-login">
-  <form class="card-login" id="form-login">
+  <form class="card-login" id="form-login" autocomplete="off">
     <h1 data-tenant-nome>Vendalytics</h1>
     <p>Entre com seu e-mail e senha</p>
-    <input type="email" id="email" placeholder="E-mail" required autofocus/>
-    <input type="password" id="senha" placeholder="Senha" required/>
+    <div class="input-group">
+      <input type="email" id="email" placeholder=" " required autofocus aria-label="E-mail"/>
+      <label for="email">E-mail</label>
+    </div>
+    <div class="input-group">
+      <input type="password" id="senha" placeholder=" " required aria-label="Senha"/>
+      <label for="senha">Senha</label>
+    </div>
     <button type="submit">Entrar</button>
-    <div class="erro" id="erro"></div>
+    <div class="erro" id="erro" role="alert"></div>
   </form>
 </div>
+
 <script src="branding.js"></script>
 <script>
 document.getElementById("form-login").addEventListener("submit", async (e) => {
@@ -25,18 +35,21 @@ document.getElementById("form-login").addEventListener("submit", async (e) => {
   const senha = document.getElementById("senha").value;
   const erroEl = document.getElementById("erro");
   erroEl.textContent = "";
+  erroEl.style.display = "none";
   try {
     const r = await fetch("/api/auth/login", {
-      method: "POST", headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({email, senha}),
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, senha }),
     });
-    if (!r.ok) { erroEl.textContent = "E-mail ou senha inválidos."; return; }
+    if (!r.ok) { erroEl.textContent = "E-mail ou senha inválidos."; erroEl.style.display = "block"; return; }
     const d = await r.json();
     localStorage.setItem("vendalytics_token", d.token);
     localStorage.setItem("vendalytics_user", JSON.stringify(d));
     location.href = "index.html";
   } catch (e) {
     erroEl.textContent = "Erro ao conectar: " + e.message;
+    erroEl.style.display = "block";
   }
 });
 </script>

@@ -7,26 +7,31 @@
 <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
-<div class="topo">
+<canvas id="bg-canvas"></canvas>
+<div class="bg-gradient"></div>
+
+<header class="topo">
   <span class="logo" data-tenant-nome>Vendalytics</span>
-  <div class="nav">
+  <nav class="nav">
     <a href="index.html">Mapa &amp; Métricas</a>
-    <a href="fila.html" class="on">Fila do dia</a>
+    <a href="fila.html" class="on" aria-current="page">Fila do dia</a>
     <a href="#" id="btn-sair">Sair</a>
-  </div>
-</div>
+  </nav>
+</header>
 
-<!-- Qualidade do modelo fica JUNTO da fila, não numa aba de admin: quem vai
-     agir a partir do número precisa saber o quanto ele merece confiança. -->
-<div class="faixa-modelo" id="faixa-modelo"></div>
+<main>
+  <section class="fila-section" aria-label="Fila do dia">
+    <div class="fila-cabecalho">
+      <h1>Fila do dia</h1>
+      <p>Ordenada por <b>valor esperado</b> (propensão &times; ticket médio) — não por score bruto.
+         Registrar o desfecho é o que faz o modelo aprender.</p>
+    </div>
 
-<div class="fila-cabecalho">
-  <h1>Fila do dia</h1>
-  <p>Ordenada por <b>valor esperado</b> (propensão &times; ticket médio) — não por score bruto.
-     Registrar o desfecho é o que faz o modelo aprender.</p>
-</div>
+    <div class="gauges" id="gauges"></div>
 
-<div id="fila"><p class="vazio">Carregando…</p></div>
+    <div id="fila"><p class="vazio">Carregando…</p></div>
+  </section>
+</main>
 
 <script src="branding.js"></script>
 <script src="fila.js"></script>

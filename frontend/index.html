@@ -5,19 +5,39 @@
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>Painel — Vendalytics</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
 <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
-<div class="topo">
+<canvas id="bg-canvas"></canvas>
+<div class="bg-gradient"></div>
+
+<header class="topo">
   <span class="logo" data-tenant-nome>Vendalytics</span>
-  <div class="nav">
-    <a href="index.html" class="on">Mapa &amp; Métricas</a>
+  <nav class="nav">
+    <a href="index.html" class="on" aria-current="page">Mapa &amp; Métricas</a>
     <a href="fila.html">Fila do dia</a>
     <a href="#" id="btn-sair">Sair</a>
-  </div>
-</div>
-<div class="kpis" id="kpis"><div class="kpi"><b>…</b><span>carregando</span></div></div>
-<div id="map"></div>
+  </nav>
+</header>
+
+<main>
+  <section class="kpis" id="kpis" aria-label="Indicadores-chave">
+    <div class="kpi"><b>…</b><span>carregando</span></div>
+  </section>
+
+  <section class="map-wrapper" aria-label="Mapa de clientes">
+    <div id="map"></div>
+    <div class="map-controls">
+      <button class="map-ctrl-btn" id="btn-heatmap" title="Alternar mapa de calor" aria-label="Alternar mapa de calor">⊞</button>
+      <button class="map-ctrl-btn" id="btn-reset" title="Redefinir vista" aria-label="Redefinir vista">⌂</button>
+    </div>
+    <div class="map-legend">
+      <span><span class="dot active"></span>Ativo</span>
+      <span><span class="dot inactive"></span>Inativo</span>
+    </div>
+  </section>
+</main>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="branding.js"></script>
