@@ -157,7 +157,7 @@ async function carregarMapa() {
   let heatLayer = null;
   const btnHeat = document.getElementById("btn-heatmap");
 
-  const d = await api("/api/clientes?limit=1500");
+  const d = await api("/api/clientes/mapa?limit=1500");
   const grupo = L.layerGroup().addTo(map);
   const pontos = [];
 

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Fila do dia — Vendalytics</title>
+<title>Campo — Vendalytics</title>
 <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
@@ -14,30 +14,29 @@
   <span class="logo" data-tenant-nome>Vendalytics</span>
   <nav class="nav">
     <a href="index.html">Mapa &amp; Métricas</a>
-    <a href="fila.html" class="on" aria-current="page">Fila do dia</a>
+    <a href="fila.html">Fila do dia</a>
     <a href="geo.html">Geo</a>
     <a href="reputacao.html">Reputação</a>
-    <a href="field.html">Campo</a>
+    <a href="field.html" class="on" aria-current="page">Campo</a>
     <a href="admin.html">Admin</a>
     <a href="#" id="btn-sair">Sair</a>
   </nav>
 </header>
 
 <main>
-  <section class="fila-section" aria-label="Fila do dia">
+  <section class="fila-section" aria-label="Roteiro de campo">
     <div class="fila-cabecalho">
-      <h1>Fila do dia</h1>
-      <p>Ordenada por <b>valor esperado</b> (propensão &times; ticket médio) — não por score bruto.
-         Registrar o desfecho é o que faz o modelo aprender.</p>
+      <h1>Roteiro do dia — campo</h1>
+      <p>Fusão de propensão (Sales) com gap de mix local (Geo): o que os vizinhos
+         geográficos e de segmento compram e este cliente ainda não — 100% grounded,
+         sem geração livre de texto.</p>
     </div>
 
-    <div class="gauges" id="gauges"></div>
-
-    <div id="fila"><p class="vazio">Carregando…</p></div>
+    <div id="roteiro"><p class="vazio">Carregando…</p></div>
   </section>
 </main>
 
 <script src="branding.js"></script>
-<script src="fila.js"></script>
+<script src="field.js"></script>
 </body>
 </html>
