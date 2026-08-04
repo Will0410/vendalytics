@@ -327,6 +327,22 @@ MIGRATIONS: list[tuple[int, str, str]] = [
         );
         """,
     ),
+    (
+        10,
+        "relatorios_executivos",
+        """
+        -- Snapshot de cada relatório gerado (spec C4) — histórico é o que
+        -- permite a seção fixa "o que mudou desde o último relatório" sem
+        -- recalcular tudo do zero a cada chamada.
+        CREATE TABLE IF NOT EXISTS relatorios_executivos (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id  TEXT NOT NULL,
+            gerado_em  TEXT NOT NULL,
+            dados      TEXT NOT NULL DEFAULT '{}'
+        );
+        CREATE INDEX IF NOT EXISTS idx_relatorios_tempo ON relatorios_executivos(tenant_id, gerado_em);
+        """,
+    ),
 ]
 
 

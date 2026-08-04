@@ -14,11 +14,14 @@ Escopo real deste MVP, e o que falta para ser a spec inteira:
   B3 Preditor de faturamento   → implementado (histórico mensal da própria
                                   unidade, com intervalo de confiança e
                                   backtest — nunca ponto único).
-  B4 Camadas de dado externo   → NÃO implementado. Requer contrato de fonte
-                                  (IBGE/POI/mobilidade) análogo a
-                                  `sources/mercado_externo.py`; fica como
-                                  próximo passo, não fingido aqui.
-  B5 Vertical packs            → NÃO implementado — depende de B4 existir.
+  B4 Camadas de dado externo   → IMPLEMENTADO PARCIALMENTE: população
+                                  estimada via `sources/ibge_real.py`
+                                  (validado ao vivo contra a API pública do
+                                  IBGE). Renda domiciliar e estrutura etária
+                                  seguem de fora — exigem agregados SIDRA
+                                  bem mais complexos; ver docstring da
+                                  fonte. POI/mobilidade continuam ausentes.
+  B5 Vertical packs            → implementado em `modules/verticais.py`.
 
 Isócronas reais (roteamento) também não existem aqui — ver
 `infra.geo.raio_aproximado_km` e o aviso que ele carrega. Nunca chamamos o
@@ -32,6 +35,8 @@ import math
 from .. import data_layer
 from ..infra import audit, context
 from ..infra.geo import haversine_km, raio_aproximado_km
+from ..sources import ibge_real
+from . import verticais
 
 # Expoente de decaimento: quanto mais alto, mais rápido a "gravidade" de um
 # cliente cai com a distância dentro do raio de busca. 2.0 é o expoente
@@ -62,10 +67,18 @@ def _clientes_geolocalizados(filial: str = "") -> list[dict]:
             if c.get("lat") and c.get("lon")]
 
 
-def simular_ponto(lat: float, lon: float, *, filial: str = "", raio_km: float = 5.0) -> dict:
+def simular_ponto(lat: float, lon: float, *, filial: str = "", raio_km: float = 5.0,
+                  vertical: str = "", parametros_vertical: dict | None = None) -> dict:
     """Score de atratividade (0-100) de um ponto candidato, decomposto em
     fatores — todo score aqui obedece a mesma regra de explicabilidade do
-    resto do produto (spec D-2), mesmo sem persistir em `infra.scores`."""
+    resto do produto (spec D-2), mesmo sem persistir em `infra.scores`.
+
+    `vertical` (spec B5, opcional) anexa um vertical pack —
+    `modules/verticais.py` — como contexto ADICIONAL, num campo `vertical`
+    à parte: um índice de mix de shopping ou um alcance estimado de mídia
+    externa não entra no mesmo score genérico de densidade+valor, porque
+    são dimensões heterogêneas que diluiriam um ao outro se misturadas.
+    """
     clientes = _clientes_geolocalizados(filial=filial)
     if not clientes:
         return {"disponivel": False, "motivo": "sem clientes geolocalizados no escopo"}
@@ -103,20 +116,44 @@ def simular_ponto(lat: float, lon: float, *, filial: str = "", raio_km: float = 
                               f"ponderado por proximidade (modelo de Huff)",
                     "contribuicao_pct": round(score_valor, 1)})
 
-    # Componentes que a spec pede e este MVP não tem dado para calcular —
-    # aparecem como null explícito, nunca como 0 (0 afirmaria "sem
-    # concorrência", que é uma alegação que este produto não pode fazer).
+    # Componente 3: camada sociodemográfica real (IBGE, spec B4) — só entra
+    # se der para resolver o município do ponto. Não há geocodificação
+    # reversa gratuita no IBGE, então o município vem do cliente mais
+    # próximo dentro do raio (aproximação honesta: "provavelmente é a
+    # mesma cidade", não uma verdade geométrica).
     componentes_ausentes = {
         "pressao_competitiva": "sem base de concorrentes georreferenciada",
-        "sociodemografico": "sem camada IBGE configurada (spec B4)",
     }
+    score_socio = None
+    if proximos:
+        c_mais_perto = min(proximos, key=lambda par: par[1])[0]
+        camada = ibge_real.camada_para_ponto(c_mais_perto.get("municipio", ""),
+                                             c_mais_perto.get("uf", ""))
+        if camada.get("disponivel"):
+            # Proxy simples e documentado: cidade grande = mercado potencial
+            # maior. Não é renda nem estrutura etária (a spec pede isso
+            # também) — só o que a integração cobre hoje.
+            score_socio = min(camada["populacao"] / 500_000, 1.0) * 100
+            fatores.append({
+                "fator": "sociodemografico_ibge",
+                "rotulo": f"município de {camada['populacao']:,} habitantes "
+                          f"(IBGE, estimativa {camada['populacao_ano_referencia']})",
+                "contribuicao_pct": round(score_socio, 1),
+            })
+        else:
+            componentes_ausentes["sociodemografico"] = camada.get("motivo", "IBGE indisponível")
+    else:
+        componentes_ausentes["sociodemografico"] = "sem cliente próximo para inferir o município"
 
-    score = round(0.6 * score_densidade + 0.4 * score_valor, 1)
+    if score_socio is not None:
+        score = round(0.45 * score_densidade + 0.35 * score_valor + 0.20 * score_socio, 1)
+    else:
+        score = round(0.6 * score_densidade + 0.4 * score_valor, 1)
 
     audit.registrar("geo.simulacao", recurso=f"{lat:.4f},{lon:.4f}",
-                    detalhe={"raio_km": raio_km, "score": score})
+                    detalhe={"raio_km": raio_km, "score": score, "vertical": vertical or None})
 
-    return {
+    resultado = {
         "disponivel": True,
         "lat": lat, "lon": lon, "raio_km": raio_km,
         "score_atratividade": score,
@@ -126,6 +163,11 @@ def simular_ponto(lat: float, lon: float, *, filial: str = "", raio_km: float = 
         "aviso_isocrona": ("aproximação por fator de sinuosidade sobre distância "
                           "em linha reta — não é isócrona real de roteamento"),
     }
+    if vertical:
+        resultado["vertical"] = verticais.aplicar_pack(
+            vertical, lat=lat, lon=lon, raio_km=raio_km, proximos=proximos,
+            parametros=parametros_vertical)
+    return resultado
 
 
 def _vetor_filial(filial: str, clientes: list[dict]) -> list[float] | None:

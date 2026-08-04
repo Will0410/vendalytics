@@ -20,6 +20,14 @@ import pytest
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ / "backend"))
 
+
+def pytest_configure(config):
+    # `network`: os únicos testes desta suíte que chamam uma API real (IBGE
+    # — pública, gratuita, sem chave; ver tests/test_ibge_real.py). Todo
+    # outro teste de integração usa HTTP mockado, porque a API de destino
+    # exige credencial que este ambiente não tem.
+    config.addinivalue_line("markers", "network: teste que chama uma API pública real (IBGE)")
+
 _TMP = Path(tempfile.mkdtemp(prefix="vendalytics-testes-"))
 os.environ["JWT_SECRET"] = "segredo-de-teste-nao-usar-em-producao"
 os.environ["VENDALYTICS_USERS_DB"] = str(_TMP / "usuarios.sqlite")

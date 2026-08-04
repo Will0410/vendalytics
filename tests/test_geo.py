@@ -106,12 +106,27 @@ def test_mais_perto_pontua_igual_ou_maior_que_mais_longe(escopo_irrestrito):
 
 
 def test_componentes_sem_dado_aparecem_como_null_nao_zero(escopo_irrestrito):
+    """Fixture desta suíte não tem município/UF nos clientes — o componente
+    de IBGE precisa aparecer como indisponível, não como zero disfarçado."""
     r = geo.simular_ponto(-23.552, -46.628, raio_km=2.0)
     assert "pressao_competitiva" in r["componentes_nao_disponiveis"]
     assert "sociodemografico" in r["componentes_nao_disponiveis"]
-    # E não aparecem disfarçados de fator com contribuição 0 na lista de fatores.
     assert not any(f["fator"] in ("pressao_competitiva", "sociodemografico")
                    for f in r["fatores"])
+
+
+def test_camada_ibge_entra_no_score_quando_disponivel(escopo_irrestrito, monkeypatch):
+    """Município resolvido + IBGE respondendo: o componente sociodemográfico
+    vira FATOR de verdade e passa a compor o score (peso realocado de
+    0,6/0,4 para 0,45/0,35/0,20 — ver geo.py)."""
+    from vendalytics.modules import geo as geo_mod
+    monkeypatch.setattr(geo_mod.ibge_real, "camada_para_ponto",
+                        lambda municipio, uf: {"disponivel": True, "populacao": 1_800_000,
+                                               "populacao_ano_referencia": 2024, "fonte": "IBGE (mock)"})
+    r = geo.simular_ponto(-23.552, -46.628, raio_km=2.0)
+    assert r["disponivel"]
+    assert any(f["fator"] == "sociodemografico_ibge" for f in r["fatores"])
+    assert "sociodemografico" not in r["componentes_nao_disponiveis"]
 
 
 def test_resposta_nunca_chama_o_raio_de_isocrona(escopo_irrestrito):

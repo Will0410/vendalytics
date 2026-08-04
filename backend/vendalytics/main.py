@@ -27,8 +27,10 @@ from .integracoes.hubspot_real import HubSpotConnector
 from .integracoes.newsapi_real import NewsAPIMentionSource
 from .integracoes.salesforce_real import SalesforceConnector
 from .integracoes.whapi_real import WhapiMessagingConnector
-from .modules import (agente, comite, executivo, field, fila, geo, identidade,
-                      mapa, mercado, metrics, mix, recompra, reputacao, territorio)
+from .modules import (agente, comite, comunicacao_kpi, contactabilidade,
+                      executivo, field, fila, geo, identidade, mapa, mercado,
+                      metrics, mix, orquestrador, recompra, relatorio,
+                      reputacao, semantico, territorio)
 
 telemetry.configurar_logging(logging.INFO, json_logs=not config.DEMO_MODE)
 log = logging.getLogger("vendalytics")
@@ -244,6 +246,14 @@ def fila_diaria(filial: str = "", limite: int = 12,
     return fila.diaria(filial=filial, limite=limite)
 
 
+@app.get("/api/fila/contactabilidade/{customer_id}")
+def fila_contactabilidade(customer_id: str, user: dict = Depends(auth.get_current_user)):
+    """Segundo score da spec A3 — sempre para ser lido AO LADO da propensão,
+    nunca sozinho: lead de propensão alta e contactabilidade baixa é caro."""
+    data_layer.cliente(customer_id)
+    return contactabilidade.calcular(customer_id)
+
+
 @app.get("/api/fila/explicacao/{customer_id}")
 def fila_explicacao(customer_id: str, user: dict = Depends(auth.get_current_user)):
     """Fatores do score atual + histórico versionado — a resposta a
@@ -416,11 +426,26 @@ def comite_remover(conta_id: str, contato_id: int, user: dict = Depends(auth.get
 # ── Geo Intelligence (spec §2.2, Fase 2) ──────────────────────────────────
 @app.get("/api/geo/simular")
 def geo_simular(lat: float, lon: float, filial: str = "", raio_km: float = 5.0,
+                vertical: str = "", municipio: str = "", uf: str = "", abl_m2: float = 0,
                 user: dict = Depends(auth.get_current_user)):
     """Score de atratividade de um ponto candidato, ponderado por proximidade
-    (Huff). Componentes sem dado real (concorrência, sociodemografia)
-    aparecem como `null` em `componentes_nao_disponiveis`, nunca como 0."""
-    return geo.simular_ponto(lat, lon, filial=filial, raio_km=raio_km)
+    (Huff), com camada sociodemográfica real do IBGE quando o município é
+    resolvido. Componentes sem dado real (concorrência) aparecem como
+    `null` em `componentes_nao_disponiveis`, nunca como 0.
+
+    `vertical` (spec B5, opcional): shopping_center | midia_externa |
+    condominios — anexa contexto específico do negócio, à parte do score
+    genérico. `municipio`/`uf`/`abl_m2` alimentam parâmetros do pack."""
+    params = {k: v for k, v in {"municipio": municipio, "uf": uf, "abl_m2": abl_m2 or None}.items()
+             if v}
+    return geo.simular_ponto(lat, lon, filial=filial, raio_km=raio_km,
+                             vertical=vertical, parametros_vertical=params)
+
+
+@app.get("/api/geo/verticais")
+def geo_verticais_disponiveis(user: dict = Depends(auth.get_current_user)):
+    from .modules.verticais import PACKS
+    return {"packs": list(PACKS)}
 
 
 @app.get("/api/geo/similaridade-filiais")
@@ -483,6 +508,25 @@ def reputacao_resumo(dias: int = 30, user: dict = Depends(auth.get_current_user)
 @app.get("/api/reputacao/benchmarking")
 def reputacao_benchmarking(dias: int = 30, user: dict = Depends(auth.get_current_user)):
     return reputacao.benchmarking(dias=dias)
+
+
+@app.get("/api/reputacao/correlacao-negocio")
+def reputacao_correlacao_negocio(filial: str = "", dias: int = 90,
+                                 user: dict = Depends(auth.get_current_user)):
+    """C3: correlação REAL medida entre sentimento diário e faturamento
+    diário — não um mapeamento fixo de nomes. Abaixo do piso de amostra,
+    sai marcado como não confiável (nunca escondido)."""
+    return comunicacao_kpi.correlacionar_sentimento_com_faturamento(filial=filial, dias=dias)
+
+
+@app.post("/api/reputacao/relatorio-executivo")
+def reputacao_relatorio_executivo(filial: str = "", dias: int = 30,
+                                  user: dict = Depends(auth.require_admin)):
+    """C4: relatório sempre disponível como fatos estruturados; prosa
+    gerada por LLM só se GROQ_API_KEY estiver configurado — grounded nos
+    mesmos dados, nunca inventando número. Persiste snapshot para a seção
+    fixa 'o que mudou desde o último relatório' da próxima chamada."""
+    return relatorio.gerar(filial=filial, dias=dias)
 
 
 @app.post("/api/reputacao/checar-anomalia")
@@ -628,6 +672,17 @@ def field_whapi_enviar(body: EnviarMensagemReq, user: dict = Depends(auth.requir
 
 
 # ── agente A7 (rascunho grounded, spec A7) ────────────────────────────────
+@app.post("/api/orquestrador/executar-ciclo")
+def orquestrador_executar_ciclo(filial: str = "", meta_contas: int = 12,
+                                redigir_abordagens: bool = True,
+                                user: dict = Depends(auth.require_admin)):
+    """Ciclo A7 completo: planejar→priorizar→executar(redigir)→medir→
+    re-aprender, numa chamada. Nunca envia nada — ver aviso na resposta e
+    a docstring de `modules/orquestrador.py`."""
+    return orquestrador.executar_ciclo(filial=filial, meta_contas=meta_contas,
+                                       redigir_abordagens=redigir_abordagens)
+
+
 @app.get("/api/agente/rascunho/{cliente_id}")
 def agente_rascunho(cliente_id: str, user: dict = Depends(auth.get_current_user)):
     """Redige um rascunho de abordagem — NUNCA envia nada sozinho. Enviar é
@@ -635,6 +690,30 @@ def agente_rascunho(cliente_id: str, user: dict = Depends(auth.get_current_user)
     depois de revisão humana do texto e dos fatos usados."""
     data_layer.cliente(cliente_id)
     return agente.redigir_abordagem(cliente_id)
+
+
+# ── construtor no-code + NL→consulta (spec D-3) ───────────────────────────
+@app.get("/api/semantico/modelo")
+def semantico_modelo(user: dict = Depends(auth.get_current_user)):
+    """Métricas e dimensões disponíveis — o que alimenta os dropdowns do
+    construtor no-code. Não existe SQL livre neste módulo: é sempre uma
+    escolha dentro deste registro fechado."""
+    return semantico.modelo()
+
+
+@app.get("/api/semantico/consultar")
+def semantico_consultar(metrica: str, dimensao: str = "", filial: str = "",
+                        user: dict = Depends(auth.get_current_user)):
+    return semantico.consultar(metrica=metrica, dimensao=dimensao, filial=filial)
+
+
+@app.get("/api/semantico/perguntar")
+def semantico_perguntar(pergunta: str, filial: str = "",
+                        user: dict = Depends(auth.get_current_user)):
+    """NL→consulta: parser determinístico primeiro (sempre disponível),
+    LLM só como fallback se não reconhecer nada e GROQ estiver configurado
+    — e mesmo o LLM só escolhe entre métricas/dimensões já registradas."""
+    return semantico.perguntar(pergunta, filial=filial)
 
 
 # ── barramento de sinais (spec D-1/§3.6, Fase 5) ──────────────────────────

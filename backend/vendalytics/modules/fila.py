@@ -125,6 +125,19 @@ def diaria(*, filial: str = "", limite: int = 12, persistir: bool = True) -> dic
         ) if persistir else None
         item.pop("features", None)
 
+        # Segundo score da spec A3, SEMPRE ao lado da propensão — computado
+        # só para os N selecionados (não para a carteira inteira, que pode
+        # ter milhares de clientes e não vai aparecer na tela mesmo).
+        try:
+            from . import contactabilidade as _contact
+            c = _contact.calcular(item["cliente_id"])
+            item["contactabilidade"] = c["contactabilidade"] if c["disponivel"] else None
+            item["contactabilidade_classe"] = (
+                _contact.classificar(c["contactabilidade"]) if c["disponivel"] else None)
+        except Exception:
+            item["contactabilidade"] = None
+            item["contactabilidade_classe"] = None
+
     audit.registrar("fila.gerada", recurso=f"filial:{filial or 'todas'}",
                     detalhe={"itens": len(selecionados), "modelo": modelo.versao})
 
