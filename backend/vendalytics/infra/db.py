@@ -161,6 +161,104 @@ MIGRATIONS: list[tuple[int, str, str]] = [
             BEGIN SELECT RAISE(ABORT, 'sinais é append-only'); END;
         """,
     ),
+    (
+        5,
+        "resolucao_de_entidade",
+        """
+        -- Mapa cliente → conta canônica (spec §3.1). NÃO é append-only: o
+        -- mapa é o estado atual da resolução e é reescrito a cada execução.
+        -- O que precisa ser estável é o `account_id` em si, e essa
+        -- estabilidade vem de ele ser derivado da raiz do CNPJ — não de a
+        -- tabela ser imutável.
+        CREATE TABLE IF NOT EXISTS contas_canonicas (
+            tenant_id    TEXT NOT NULL,
+            cliente_id   TEXT NOT NULL,
+            account_id   TEXT NOT NULL,
+            metodo       TEXT NOT NULL,   -- cnpj_raiz | id_local | curadoria
+            resolvido_em TEXT NOT NULL,
+            PRIMARY KEY (tenant_id, cliente_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_contas_account
+            ON contas_canonicas(tenant_id, account_id);
+
+        -- Decisões humanas sobre pares suspeitos. É o que impede o sistema
+        -- de fundir contas sozinho (fusão errada é cara de desfazer) e, de
+        -- quebra, acumula os pares rotulados que um classificador de match
+        -- precisaria para ser treinado.
+        CREATE TABLE IF NOT EXISTS decisoes_match (
+            tenant_id   TEXT NOT NULL,
+            cliente_a   TEXT NOT NULL,
+            cliente_b   TEXT NOT NULL,
+            decisao     TEXT NOT NULL,    -- mesmo | distinto
+            usuario     TEXT NOT NULL,
+            decidido_em TEXT NOT NULL,
+            PRIMARY KEY (tenant_id, cliente_a, cliente_b)
+        );
+        """,
+    ),
+    (
+        6,
+        "integracoes_crm",
+        """
+        -- Oportunidades importadas do CRM (spec A6, "in"). Upsert por
+        -- (tenant_id, cnpj): reimportar o mesmo CSV/sync não duplica —
+        -- atualiza o estágio da mesma oportunidade. É o label mais
+        -- confiável que existe quando disponível (ganho/perda real, não a
+        -- proxy de recompra).
+        CREATE TABLE IF NOT EXISTS oportunidades_crm (
+            tenant_id     TEXT NOT NULL,
+            provedor      TEXT NOT NULL,
+            cnpj          TEXT NOT NULL,
+            razao_social  TEXT NOT NULL DEFAULT '',
+            estagio       TEXT NOT NULL,
+            valor         REAL NOT NULL DEFAULT 0,
+            criada_em     TEXT NOT NULL,
+            fechada_em    TEXT,
+            ganhou        INTEGER,        -- NULL=aberta, 0=perdeu, 1=ganhou
+            motivo_perda  TEXT NOT NULL DEFAULT '',
+            importado_em  TEXT NOT NULL,
+            PRIMARY KEY (tenant_id, cnpj)
+        );
+
+        -- Registro de cada rodada de write-back — auditável e reprocessável,
+        -- espelhando o padrão de proveniência do resto da spec (§3.1/§3.7).
+        CREATE TABLE IF NOT EXISTS envios_crm (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id     TEXT NOT NULL,
+            provedor      TEXT NOT NULL,
+            itens_enviados   INTEGER NOT NULL,
+            itens_falhos     INTEGER NOT NULL,
+            destino       TEXT NOT NULL DEFAULT '',
+            enviado_em    TEXT NOT NULL
+        );
+        """,
+    ),
+    (
+        7,
+        "comite_de_compras",
+        """
+        -- Comitê de compras (spec A5): múltiplos decisores por conta, com
+        -- papel e canal. `conta_id` é o cliente_id hoje (a conta canônica de
+        -- `identidade.py` quando existir) — venda complexa com um único
+        -- contato mapeado é risco que o score de completude torna visível.
+        CREATE TABLE IF NOT EXISTS contatos (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id     TEXT NOT NULL,
+            conta_id      TEXT NOT NULL,
+            nome          TEXT NOT NULL,
+            papel         TEXT NOT NULL,   -- decisor_economico|usuario|influenciador|gatekeeper|campeao
+            senioridade   TEXT NOT NULL DEFAULT '',
+            canal_preferencial TEXT NOT NULL DEFAULT '',
+            email         TEXT NOT NULL DEFAULT '',
+            telefone      TEXT NOT NULL DEFAULT '',
+            criado_em     TEXT NOT NULL,
+            criado_por    TEXT NOT NULL,
+            removido_em   TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_contatos_conta
+            ON contatos(tenant_id, conta_id) WHERE removido_em IS NULL;
+        """,
+    ),
 ]
 
 

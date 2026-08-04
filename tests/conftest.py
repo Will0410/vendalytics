@@ -12,6 +12,7 @@ import os
 import sqlite3
 import sys
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -23,6 +24,7 @@ _TMP = Path(tempfile.mkdtemp(prefix="vendalytics-testes-"))
 os.environ["JWT_SECRET"] = "segredo-de-teste-nao-usar-em-producao"
 os.environ["VENDALYTICS_USERS_DB"] = str(_TMP / "usuarios.sqlite")
 os.environ["VENDALYTICS_SQLITE_PATH"] = str(_TMP / "dados.sqlite")
+os.environ["VENDALYTICS_CRM_STAGING"] = str(_TMP / "crm_staging")
 os.environ["DEMO_MODE"] = "false"
 
 from vendalytics import auth, config, data_layer  # noqa: E402
@@ -55,6 +57,25 @@ def _povoar(caminho: Path) -> None:
     )
     con.commit()
     con.close()
+
+
+@contextmanager
+def base_isolada(nome: str):
+    """Aponta o adapter para um SQLite próprio deste módulo de teste.
+
+    Sem isto, um fixture que popula a base contamina os outros arquivos e a
+    suíte só passa na ordem em que os arquivos são coletados — dependência
+    invisível que quebra no dia em que alguém renomeia um teste ou instala o
+    pytest-randomly.
+    """
+    anterior = config.SQLITE_PATH
+    config.SQLITE_PATH = _TMP / f"{nome}.sqlite"
+    data_layer._adapter.cache_clear()
+    try:
+        yield config.SQLITE_PATH
+    finally:
+        config.SQLITE_PATH = anterior
+        data_layer._adapter.cache_clear()
 
 
 @pytest.fixture(scope="session", autouse=True)

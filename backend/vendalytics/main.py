@@ -10,7 +10,7 @@ import logging
 import os
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -18,7 +18,9 @@ from pydantic import BaseModel
 
 from . import auth, config, data_layer, tenant
 from .infra import audit, context, db, middleware, telemetry
-from .modules import executivo, mercado, metrics, mix, recompra
+from .integracoes.csv_connector import CSVCRMConnector, exportar_recomendacoes, importar, oportunidades
+from .modules import (comite, executivo, fila, identidade, mercado, metrics,
+                      mix, recompra, territorio)
 
 telemetry.configurar_logging(logging.INFO, json_logs=not config.DEMO_MODE)
 log = logging.getLogger("vendalytics")
@@ -193,6 +195,198 @@ def territorio_tam_sam_som(filial: str = "", segmento: str = "", uf: str = "",
     `aviso` preenchido quando não há fonte externa de universo configurada
     (CORTEX_API_URL) — nunca finge whitespace=0 por falta de dado."""
     return mercado.tam_sam_som(filial=filial, segmento=segmento, uf=uf)
+
+
+@app.get("/api/territorio/simular-carteiras")
+def territorio_simular_carteiras(filial: str = "", vendedores_extra: int = 0,
+                                 user: dict = Depends(auth.get_current_user)):
+    """Distribuição de carteiras equilibrada por POTENCIAL (spec A4), com
+    penalidade geográfica e bônus de continuidade de relacionamento.
+    `vendedores_extra` responde "e se eu contratar mais N?".
+
+    Só simula — nunca aplica. Redistribuir carteira mexe em comissão de
+    gente, e precisa ser vista e ajustada antes de existir."""
+    return territorio.simular(filial=filial, vendedores_extra=vendedores_extra)
+
+
+# ── propensão / fila priorizada (spec §2.1 A1+A3, §5) ───────────────────
+@app.get("/api/fila/diaria")
+def fila_diaria(filial: str = "", limite: int = 12,
+                user: dict = Depends(auth.get_current_user)):
+    """A fila do dia, ordenada por VALOR ESPERADO (propensão × ticket), não
+    por score bruto. Vem acompanhada das métricas do modelo (AUC out-of-time,
+    ECE, lift) — quem vai agir precisa saber o quanto o número merece
+    confiança."""
+    return fila.diaria(filial=filial, limite=limite)
+
+
+@app.get("/api/fila/explicacao/{customer_id}")
+def fila_explicacao(customer_id: str, user: dict = Depends(auth.get_current_user)):
+    """Fatores do score atual + histórico versionado — a resposta a
+    "por que este score mudou desde ontem?" (spec §3.6)."""
+    data_layer.cliente(customer_id)   # aplica o escopo antes de expor o score
+    return fila.explicacao(customer_id)
+
+
+class DesfechoReq(BaseModel):
+    desfecho: str
+    motivo: str = ""
+    valor: float | None = None
+
+
+@app.post("/api/fila/desfecho/{customer_id}")
+def fila_desfecho(customer_id: str, body: DesfechoReq,
+                  user: dict = Depends(auth.get_current_user)):
+    """Fecha o loop (spec §5, passo 7): aceita|recusada|ganhou|perdeu|ignorada.
+    Grava o desfecho, emite o sinal e invalida o modelo em cache."""
+    data_layer.cliente(customer_id)   # não deixa fechar loop de cliente fora do escopo
+    try:
+        return fila.registrar_desfecho(customer_id, body.desfecho,
+                                       motivo=body.motivo, valor=body.valor)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.get("/api/fila/saude-do-loop")
+def fila_saude_do_loop(dias: int = 30, user: dict = Depends(auth.get_current_user)):
+    """Cobertura de loop fechado e taxa de aceite (spec §7.4/§7.1). Se a
+    cobertura cai, o produto parou de aprender e virou mais um dashboard."""
+    return fila.saude_do_loop(dias=dias)
+
+
+# ── resolução de entidade / account_id canônico (spec §3.1, §4.3) ────────
+@app.post("/api/identidade/resolver")
+def identidade_resolver(filial: str = "", user: dict = Depends(auth.require_admin)):
+    """Recalcula o `account_id` canônico de cada cliente. Determinístico:
+    rodar duas vezes sobre o mesmo cadastro dá exatamente os mesmos ids."""
+    return identidade.resolver(filial=filial)
+
+
+@app.get("/api/identidade/duplicatas")
+def identidade_duplicatas(filial: str = "", limite: int = 50,
+                          user: dict = Depends(auth.get_current_user)):
+    """Fila de curadoria: pares suspeitos COM as evidências que os levantaram.
+    O sistema sugere, o humano decide — fusão errada é muito mais cara de
+    desfazer do que de evitar."""
+    return {"candidatos": identidade.candidatos_a_duplicata(filial=filial, limite=limite)}
+
+
+class DecisaoMatchReq(BaseModel):
+    cliente_a: str
+    cliente_b: str
+    decisao: str   # mesmo | distinto
+
+
+@app.post("/api/identidade/decidir")
+def identidade_decidir(body: DecisaoMatchReq, user: dict = Depends(auth.get_current_user)):
+    """Registra a decisão humana. `mesmo` funde na próxima resolução;
+    `distinto` tira o par da fila para sempre."""
+    data_layer.cliente(body.cliente_a)   # aplica o escopo nos dois lados
+    data_layer.cliente(body.cliente_b)
+    try:
+        return identidade.decidir(body.cliente_a, body.cliente_b, body.decisao)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.get("/api/identidade/qualidade")
+def identidade_qualidade(user: dict = Depends(auth.get_current_user)):
+    """Métrica de qualidade do match, publicada — sem ela ninguém percebe a
+    resolução degradando até o usuário reclamar de conta duplicada na tela."""
+    return identidade.qualidade()
+
+
+# ── integração CRM (spec A6) ──────────────────────────────────────────────
+@app.post("/api/crm/importar-csv")
+async def crm_importar_csv(request: Request, user: dict = Depends(auth.require_admin)):
+    """IN: importa oportunidades de um CSV enviado como corpo do request
+    (multipart 'arquivo' ou corpo bruto). Upsert idempotente por CNPJ —
+    reimportar o mesmo arquivo não duplica, só atualiza o estágio."""
+    from tempfile import NamedTemporaryFile
+
+    form = None
+    try:
+        form = await request.form()
+    except Exception:
+        pass
+    conteudo = None
+    if form and "arquivo" in form:
+        conteudo = await form["arquivo"].read()
+    else:
+        conteudo = await request.body()
+    if not conteudo:
+        raise HTTPException(400, "envie o CSV como multipart 'arquivo' ou como corpo bruto")
+
+    with NamedTemporaryFile(suffix=".csv", delete=False) as tmp:
+        tmp.write(conteudo)
+        caminho = tmp.name
+    try:
+        return importar(CSVCRMConnector(caminho))
+    finally:
+        import os as _os
+        _os.unlink(caminho)
+
+
+@app.get("/api/crm/oportunidades")
+def crm_oportunidades(apenas_fechadas: bool = False, user: dict = Depends(auth.get_current_user)):
+    return {"oportunidades": oportunidades(apenas_fechadas=apenas_fechadas)}
+
+
+@app.post("/api/crm/exportar-recomendacoes")
+def crm_exportar_recomendacoes(filial: str = "", limite: int = 50,
+                               user: dict = Depends(auth.require_admin)):
+    """OUT (write-back, spec A6): pega a fila priorizada atual e escreve
+    score + fatores de volta no CRM. Sem provedor real conectado, grava em
+    staging versionado — mesmo formato que um conector real enviaria."""
+    r = fila.diaria(filial=filial, limite=limite, persistir=True)
+    if not r["disponivel"]:
+        raise HTTPException(409, r["motivo"])
+    itens = [
+        {"cliente_id": i["cliente_id"], "score": i["score"],
+         "probabilidade": i["probabilidade"], "valor_esperado": i["valor_esperado"],
+         "fatores": i["fatores"], "modelo_versao": r["modelo"]["versao"]}
+        for i in r["itens"]
+    ]
+    return exportar_recomendacoes(CSVCRMConnector(), itens)
+
+
+# ── comitê de compras (spec A5) ───────────────────────────────────────────
+class ContatoReq(BaseModel):
+    nome: str
+    papel: str
+    senioridade: str = ""
+    canal_preferencial: str = ""
+    email: str = ""
+    telefone: str = ""
+
+
+@app.get("/api/contas/{conta_id}/comite")
+def comite_listar(conta_id: str, user: dict = Depends(auth.get_current_user)):
+    data_layer.cliente(conta_id)   # aplica o escopo
+    return {"contatos": comite.listar(conta_id), "completude": comite.completude(conta_id)}
+
+
+@app.post("/api/contas/{conta_id}/comite")
+def comite_adicionar(conta_id: str, body: ContatoReq,
+                     user: dict = Depends(auth.get_current_user)):
+    data_layer.cliente(conta_id)
+    try:
+        return comite.adicionar(conta_id, nome=body.nome, papel=body.papel,
+                                senioridade=body.senioridade,
+                                canal_preferencial=body.canal_preferencial,
+                                email=body.email, telefone=body.telefone)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.delete("/api/contas/{conta_id}/comite/{contato_id}")
+def comite_remover(conta_id: str, contato_id: int, user: dict = Depends(auth.get_current_user)):
+    data_layer.cliente(conta_id)
+    try:
+        comite.remover(conta_id, contato_id)
+        return {"removido": True}
+    except ValueError as e:
+        raise HTTPException(404, str(e))
 
 
 # ── auditoria (§3.7) ─────────────────────────────────────────────────────

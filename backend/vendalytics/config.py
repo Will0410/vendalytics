@@ -62,3 +62,8 @@ WHAPI_WEBHOOK_SECRET = os.getenv("WHAPI_WEBHOOK_SECRET", "").strip()
 # Banco operacional (usuários + trilha de auditoria). Configurável por env
 # para que teste e ambiente de CI não escrevam no banco real da instalação.
 USERS_DB_PATH = Path(os.getenv("VENDALYTICS_USERS_DB", str(PROJECT_ROOT / "usuarios.sqlite")))
+
+# Staging do write-back de CRM (integracoes/csv_connector.py). Mesma razão do
+# USERS_DB_PATH: sem isto, rodar a suíte de teste grava arquivo real dentro
+# do projeto a cada execução.
+CRM_STAGING_DIR = Path(os.getenv("VENDALYTICS_CRM_STAGING", str(PROJECT_ROOT / "var" / "crm_staging")))

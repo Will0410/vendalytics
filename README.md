@@ -67,6 +67,89 @@ uma migration já publicada; adicione a próxima.
 com o mesmo id (correlaciona log ↔ trilha ↔ resposta) e latência p50/p95 por
 rota em `GET /api/metrics/runtime` (admin).
 
+## Fase 1: integração de CRM e comitê de compras
+
+**Conector de CRM** (`integracoes/`) — mesmo padrão do `DataSourceAdapter`:
+contrato em `base.py` (`CRMConnector`), implementação de referência em
+`csv_connector.py` que funciona de verdade hoje. Não há conector
+Salesforce/HubSpot real: um conector OAuth "pronto" que nunca rodou contra a
+API de verdade passaria confiança sem lastro. O que é testável sem
+credenciais de provedor — reconciliação por CNPJ, idempotência, write-back —
+está implementado e testado; o adapter Salesforce/HubSpot entra depois, sobre
+o mesmo contrato, quando houver conta de teste para validar contra a API real.
+
+- `POST /api/crm/importar-csv` — upsert idempotente por CNPJ; reimportar o
+  mesmo arquivo não duplica, atualiza o estágio da mesma oportunidade. CNPJ
+  inválido é descartado, nunca adivinhado.
+- `POST /api/crm/exportar-recomendacoes` — write-back: pega a fila
+  priorizada atual e escreve score + fatores de volta (staging versionado
+  hoje, chamada de API amanhã — o resto do sistema não muda).
+
+**Comitê de compras** (`modules/comite.py`, spec A5) — múltiplos contatos por
+conta com papel (decisor econômico, usuário, influenciador, gatekeeper,
+campeão) e **score de completude** com pesos explícitos: decisor econômico e
+campeão pesam mais que os demais, porque a ausência deles é o risco real —
+"venda complexa com um único contato mapeado é risco a mais que uma
+recompra de propensão alta não compensa".
+
+## Fase 1: resolução de entidade
+
+`modules/identidade.py` — atribui um `account_id` **canônico e estável** a
+cada cliente (spec §3.1/§4.3: "peça crítica, subestimada em quase todo
+projeto assim"). Sem isso a mesma empresa aparece várias vezes na fila e o
+usuário para de confiar na tela.
+
+Estratégia em duas camadas:
+1. **Raiz do CNPJ** (determinística) — matriz e filial compartilham os 8
+   primeiros dígitos por lei; cobre a maioria dos casos sem depender de
+   nenhum estado guardado.
+2. **Curadoria humana** para o resto — Jaro-Winkler + telefone/e-mail/CEP
+   levantam candidatos a duplicata **com evidências**, mas o sistema nunca
+   funde sozinho: `GET /api/identidade/duplicatas` lista, `POST
+   /api/identidade/decidir` registra a decisão. Fusão errada é muito mais
+   cara de desfazer do que de evitar.
+
+O requisito de verdade não é precisão do match, é **estabilidade**: rodar a
+resolução duas vezes sobre o mesmo cadastro precisa produzir exatamente os
+mesmos ids, senão score/sinal/desfecho históricos apontam para uma conta que
+não existe mais. `GET /api/identidade/qualidade` publica o quanto da
+carteira ficou sem documento válido (o principal limitador real).
+
+## Fase 1: propensão explicável e fila priorizada
+
+**Modelo de propensão de recompra** (`modules/propensao.py`) — regressão
+logística treinada no próprio histórico, com **validação out-of-time** (nunca
+k-fold aleatório: o modelo vai ser usado no futuro, então é medido no futuro)
+e métricas publicadas junto da fila: AUC, ECE (calibração) e lift do top decil.
+
+Escolha de modelo consciente: a spec pede LightGBM/XGBoost. Aqui é logística
+porque (a) o projeto roda sem numpy/sklearn e um modelo de 300MB de wheels
+mudaria o perfil de deploy inteiro, e (b) para modelo linear a contribuição
+`coef·(x−E[x])` **é** o valor SHAP — forma fechada, sem aproximação. Trocar
+por GBM+SHAP depois muda `_treinar`/`_contribuicoes` e nada mais.
+
+**Fila priorizada** (`modules/fila.py`) — ordenada por **valor esperado**
+(`probabilidade × ticket`), não por score bruto, e **finita** (12 contas no
+dia, não 4.000 no ranking). Cada item traz os fatores em linguagem de
+negócio, nunca o nome da variável.
+
+**Loop fechado** — `POST /api/fila/desfecho/{id}` com
+`aceita|recusada|ganhou|perdeu|ignorada`. Grava o desfecho, emite o sinal e
+invalida o modelo em cache. `GET /api/fila/saude-do-loop` reporta a cobertura
+de loop fechado, que é a métrica que faz todas as outras melhorarem sozinhas.
+
+**Distribuição de carteiras** (`modules/territorio.py`) — reparte clientes
+entre vendedores equilibrando **potencial**, não headcount (dividir 80
+clientes em 4 grupos de 20 é inútil quando 8 deles valem 90% da receita),
+com penalidade geográfica e bônus de continuidade de relacionamento. Heurística
+gulosa e explicável, não ótimo global: o gestor precisa entender e ajustar a
+proposta. `GET /api/territorio/simular-carteiras?vendedores_extra=N` responde
+"e se eu contratar mais N?" — e **nunca aplica**, só simula.
+
+Score, fator, sinal e desfecho vivem em tabelas **append-only** (trigger no
+banco): nunca `UPDATE scores SET valor=...`, sempre uma versão nova — é o que
+permite responder "por que este score mudou desde ontem?".
+
 ### Testes
 
 ```bash
