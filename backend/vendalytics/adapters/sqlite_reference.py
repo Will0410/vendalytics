@@ -103,8 +103,8 @@ class SQLiteReferenceAdapter(DataSourceAdapter):
     def health_check(self) -> bool:
         try:
             with closing(self._con()) as con:
-                con.execute("SELECT 1 FROM clientes LIMIT 1")
-            return True
+                row = con.execute("SELECT 1 FROM clientes LIMIT 1").fetchone()
+            return row is not None
         except Exception:
             return False
 

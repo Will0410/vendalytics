@@ -34,9 +34,40 @@ def _startup():
     env_keys = [k for k in os.environ.keys() if k in ("JWT_SECRET",) or k.endswith("SECRET") or k.endswith("_KEY")]
     log.info("Startup env check: JWT_SECRET present=%s, keys_found=%s", jwt_present, env_keys)
     if not data_layer.disponivel():
-        log.warning(
-            "Fonte de dados sem dado carregado — rode "
-            "`python -m demo_data.seed` para gerar a base de demonstração.")
+        if config.DEMO_MODE:
+            log.warning("Fonte de dados sem dado carregado — gerando base de "
+                        "demonstração sintética (DEMO_MODE=true)...")
+            _seed_demo_se_vazio()
+        else:
+            log.warning(
+                "Fonte de dados sem dado carregado — rode "
+                "`python -m demo_data.seed` para gerar a base de demonstração.")
+
+
+def _seed_demo_se_vazio() -> None:
+    """Gera a base sintética de demonstração direto no startup — necessário
+    porque o disco em ambientes como o Render free tier é efêmero: cada
+    deploy/restart reseta o filesystem local, então rodar `demo_data.seed`
+    manualmente uma vez não sobrevive ao próximo deploy. Faker com seed fixa
+    (42) garante o mesmo dado sintético a cada regeneração."""
+    import sqlite3
+    import sys
+    from contextlib import closing
+
+    sys.path.insert(0, str(config.PROJECT_ROOT))
+    try:
+        from demo_data.seed import gerar
+    except ImportError as e:
+        log.error("Não foi possível importar demo_data.seed: %s", e)
+        return
+
+    config.SQLITE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        with closing(sqlite3.connect(str(config.SQLITE_PATH))) as con:
+            gerar(con)
+        log.info("Base de demonstração gerada em %s.", config.SQLITE_PATH)
+    except Exception as e:
+        log.error("Falha ao gerar base de demonstração: %s", e)
 
 
 # ── auth ──────────────────────────────────────────────────────────────
