@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import auth, config, data_layer, tenant
-from .modules import metrics
+from .modules import executivo, metrics, mix, recompra
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("vendalytics")
@@ -93,6 +93,24 @@ def dashboard(filial: str = "", user: dict = Depends(auth.get_current_user)):
 @app.get("/api/vendedores")
 def vendedores(filial: str = "", user: dict = Depends(auth.get_current_user)):
     return {"vendedores": data_layer.vendedores(filial=filial)}
+
+
+# ── recompra preditiva ───────────────────────────────────────────────────
+@app.get("/api/recompra/vencendo")
+def recompra_vencendo(filial: str = "", max_n: int = 50, user: dict = Depends(auth.get_current_user)):
+    return recompra.vencendo(filial=filial, max_n=max_n)
+
+
+# ── gap de mix / cross-sell ──────────────────────────────────────────────
+@app.get("/api/mix/gap")
+def mix_gap(filial: str = "", meses: int = 3, user: dict = Depends(auth.get_current_user)):
+    return mix.gap(filial=filial, meses=meses)
+
+
+# ── painel executivo ─────────────────────────────────────────────────────
+@app.get("/api/executivo/overview")
+def executivo_overview(filial: str = "", user: dict = Depends(auth.get_current_user)):
+    return executivo.overview(filial=filial)
 
 
 # ── diagnóstico (sem auth — health check simples) ───────────────────────

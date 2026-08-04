@@ -53,6 +53,10 @@ def catalogo_produtos(filial: str = "") -> list[dict]:
     return _adapter().catalogo_produtos(filial=filial)
 
 
+def mix_penetracao_categorias(*, filial: str = "", meses: int = 3) -> dict:
+    return _adapter().mix_penetracao_categorias(filial=filial, meses=meses)
+
+
 def vendedores(filial: str = "") -> list[dict]:
     return _adapter().vendedores(filial=filial)
 

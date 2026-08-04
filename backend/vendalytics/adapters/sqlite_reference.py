@@ -158,8 +158,12 @@ class SQLiteReferenceAdapter(DataSourceAdapter):
                 f"SELECT COUNT(*) FROM clientes WHERE {where} AND lat IS NOT NULL", params).fetchone()[0]
             por_filial = {r[0]: r[1] for r in con.execute(
                 "SELECT filial, COUNT(*) FROM clientes GROUP BY filial")}
+            where_v, params_v = "1=1", []
+            if filial:
+                where_v, params_v = "filial=?", [filial]
             faturamento_30d = con.execute(
-                "SELECT COALESCE(SUM(valor_total),0) FROM vendas WHERE data_venda >= date('now','-30 day')"
+                f"SELECT COALESCE(SUM(valor_total),0) FROM vendas "
+                f"WHERE {where_v} AND data_venda >= date('now','-30 day')", params_v
             ).fetchone()[0]
         return {
             "total_clientes": total, "clientes_ativos": ativos, "com_coordenada": com_coord,
@@ -204,6 +208,42 @@ class SQLiteReferenceAdapter(DataSourceAdapter):
         with closing(self._con()) as con:
             rows = con.execute("SELECT * FROM produtos WHERE ativo=1 ORDER BY categoria, nome").fetchall()
         return [dict(r) for r in rows]
+
+    def mix_penetracao_categorias(self, *, filial: str = "", meses: int = 3) -> dict:
+        where_cli, params_cli = "status='ativo'", []
+        if filial:
+            where_cli += " AND filial=?"
+            params_cli.append(filial)
+        where_v, params_v = "v.data_venda >= date('now', ?)", [f"-{int(meses) * 30} day"]
+        if filial:
+            where_v += " AND v.filial=?"
+            params_v.append(filial)
+        with closing(self._con()) as con:
+            total_ativos = con.execute(
+                f"SELECT COUNT(*) FROM clientes WHERE {where_cli}", params_cli).fetchone()[0]
+            rows = con.execute(
+                f"""SELECT p.categoria AS categoria,
+                           COUNT(DISTINCT v.cliente_id) AS clientes,
+                           COALESCE(SUM(i.quantidade * i.valor_unitario), 0) AS valor
+                    FROM vendas v
+                    JOIN vendas_itens i ON i.venda_id = v.id
+                    JOIN produtos p ON p.id = i.produto_id
+                    WHERE {where_v}
+                    GROUP BY p.categoria
+                    ORDER BY valor DESC""", params_v).fetchall()
+        return {
+            "total_clientes_ativos": total_ativos,
+            "categorias": [
+                {
+                    "categoria": r["categoria"],
+                    "clientes_compraram": r["clientes"],
+                    "penetracao_pct": round(100 * r["clientes"] / total_ativos, 1) if total_ativos else 0.0,
+                    "valor": round(r["valor"] or 0, 2),
+                    "whitespace": max(total_ativos - r["clientes"], 0),
+                }
+                for r in rows
+            ],
+        }
 
     def vendedores(self, filial: str = "") -> list[dict]:
         where, params = "ativo=1", []

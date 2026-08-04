@@ -55,6 +55,12 @@ class DataSourceAdapter(ABC):
     def catalogo_produtos(self, filial: str = "") -> list[dict]:
         """Catálogo de produtos disponíveis (para gap de mix)."""
 
+    @abstractmethod
+    def mix_penetracao_categorias(self, *, filial: str = "", meses: int = 3) -> dict:
+        """Penetração por categoria de produto na janela recente: quantos
+        clientes ativos (do total do escopo) compraram cada categoria, e o
+        valor vendido — base para o gap de mix/cross-sell."""
+
     # ── Equipe / roteiro ──────────────────────────────────────────────
     @abstractmethod
     def vendedores(self, filial: str = "") -> list[dict]:
