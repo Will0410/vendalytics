@@ -279,7 +279,7 @@ body {
   background: var(--bg-surface);
 }
 
-.leaflet-tile-pane { filter: saturate(0.3) brightness(0.55) contrast(1.2); }
+.leaflet-tile-pane { filter: saturate(0.6) brightness(0.85) contrast(1.1); }
 
 .map-controls {
   position: absolute;
