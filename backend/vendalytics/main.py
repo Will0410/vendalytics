@@ -18,9 +18,17 @@ from pydantic import BaseModel
 
 from . import auth, config, data_layer, tenant
 from .infra import audit, context, db, middleware, telemetry
+from .infra import reactor
+from .integracoes import hubspot_real, newsapi_real, salesforce_real, whapi_real
+from .integracoes.console_messaging import ConsoleMessagingConnector
 from .integracoes.csv_connector import CSVCRMConnector, exportar_recomendacoes, importar, oportunidades
-from .modules import (comite, executivo, fila, identidade, mercado, metrics,
-                      mix, recompra, territorio)
+from .integracoes.csv_mention_connector import CSVMentionSource
+from .integracoes.hubspot_real import HubSpotConnector
+from .integracoes.newsapi_real import NewsAPIMentionSource
+from .integracoes.salesforce_real import SalesforceConnector
+from .integracoes.whapi_real import WhapiMessagingConnector
+from .modules import (agente, comite, executivo, field, fila, geo, identidade,
+                      mapa, mercado, metrics, mix, recompra, reputacao, territorio)
 
 telemetry.configurar_logging(logging.INFO, json_logs=not config.DEMO_MODE)
 log = logging.getLogger("vendalytics")
@@ -139,6 +147,22 @@ def clientes(bbox: str = "", texto: str = "", filial: str = "",
         if len(partes) == 4:
             bb = tuple(partes)
     return data_layer.query_clientes(bbox=bb, texto=texto, filial=filial, limit=limit, offset=offset)
+
+
+@app.get("/api/clientes/mapa")
+def clientes_mapa(bbox: str = "", texto: str = "", filial: str = "",
+                  limit: int = 1500, offset: int = 0,
+                  user: dict = Depends(auth.get_current_user)):
+    """Mesma listagem de `/api/clientes`, enriquecida com `valor_esperado`
+    (modelo de propensão) e `atividade` (deltas mensais, últimos 6 meses) —
+    o que o mapa usa para raio/sparkline do ponto. Separado do endpoint
+    genérico para não pagar o custo de rodar o modelo em toda consulta."""
+    bb = None
+    if bbox:
+        partes = [float(x) for x in bbox.split(",")]
+        if len(partes) == 4:
+            bb = tuple(partes)
+    return mapa.pontos(bbox=bb, texto=texto, filial=filial, limit=limit, offset=offset)
 
 
 @app.get("/api/clientes/{customer_id}")
@@ -387,6 +411,248 @@ def comite_remover(conta_id: str, contato_id: int, user: dict = Depends(auth.get
         return {"removido": True}
     except ValueError as e:
         raise HTTPException(404, str(e))
+
+
+# ── Geo Intelligence (spec §2.2, Fase 2) ──────────────────────────────────
+@app.get("/api/geo/simular")
+def geo_simular(lat: float, lon: float, filial: str = "", raio_km: float = 5.0,
+                user: dict = Depends(auth.get_current_user)):
+    """Score de atratividade de um ponto candidato, ponderado por proximidade
+    (Huff). Componentes sem dado real (concorrência, sociodemografia)
+    aparecem como `null` em `componentes_nao_disponiveis`, nunca como 0."""
+    return geo.simular_ponto(lat, lon, filial=filial, raio_km=raio_km)
+
+
+@app.get("/api/geo/similaridade-filiais")
+def geo_similaridade(user: dict = Depends(auth.get_current_user)):
+    """Comparador de similaridade entre filiais (spec B2) — base para
+    transferir aprendizado de precificação/sortimento entre unidades."""
+    return geo.similaridade_entre_filiais()
+
+
+@app.get("/api/geo/faturamento-previsto")
+def geo_faturamento_previsto(filial: str, user: dict = Depends(auth.get_current_user)):
+    """Preditor de faturamento com intervalo de confiança (spec B3) — nunca
+    ponto único, sempre com o erro histórico do método ao lado (backtest)."""
+    return geo.prever_faturamento(filial)
+
+
+# ── Reputation Intelligence (spec §2.3, Fase 3) ───────────────────────────
+@app.post("/api/reputacao/importar-csv")
+async def reputacao_importar_csv(request: Request, filial: str = "",
+                                 user: dict = Depends(auth.require_admin)):
+    """Importa menções de um CSV (multipart 'arquivo' ou corpo bruto).
+    Classifica sentimento por léxico, deduplica por similaridade e casa com
+    conta conhecida — publicando sinal no barramento quando casa (spec D-1)."""
+    from tempfile import NamedTemporaryFile
+
+    form = None
+    try:
+        form = await request.form()
+    except Exception:
+        pass
+    conteudo = await form["arquivo"].read() if form and "arquivo" in form else await request.body()
+    if not conteudo:
+        raise HTTPException(400, "envie o CSV como multipart 'arquivo' ou como corpo bruto")
+
+    with NamedTemporaryFile(suffix=".csv", delete=False) as tmp:
+        tmp.write(conteudo)
+        caminho = tmp.name
+    try:
+        return reputacao.importar(CSVMentionSource(caminho), filial=filial)
+    finally:
+        import os as _os
+        _os.unlink(caminho)
+
+
+@app.get("/api/reputacao/mencoes")
+def reputacao_mencoes(dias: int = 30, apenas_negativas: bool = False, conta_ref: str = "",
+                      limit: int = 200, user: dict = Depends(auth.get_current_user)):
+    """Menções deduplicadas — só o representante de cada cluster de
+    replicação aparece (spec: 40 portais republicando a mesma nota são UM
+    evento, não 40)."""
+    return {"mencoes": reputacao.mencoes(dias=dias, apenas_negativas=apenas_negativas,
+                                        conta_ref=conta_ref, limit=limit)}
+
+
+@app.get("/api/reputacao/resumo")
+def reputacao_resumo(dias: int = 30, user: dict = Depends(auth.get_current_user)):
+    return reputacao.resumo_sentimento(dias=dias)
+
+
+@app.get("/api/reputacao/benchmarking")
+def reputacao_benchmarking(dias: int = 30, user: dict = Depends(auth.get_current_user)):
+    return reputacao.benchmarking(dias=dias)
+
+
+@app.post("/api/reputacao/checar-anomalia")
+def reputacao_checar_anomalia(dia: str = "", user: dict = Depends(auth.require_admin)):
+    """Dispara a checagem de anomalia de volume (spec C5). Em produção seria
+    um job agendado; aqui é explícito para não depender de scheduler."""
+    return reputacao.checar_anomalia_de_volume(dia=dia)
+
+
+@app.get("/api/reputacao/alertas")
+def reputacao_alertas(limit: int = 50, user: dict = Depends(auth.get_current_user)):
+    return {"alertas": reputacao.alertas(limit=limit)}
+
+
+# ── Field Execution (spec §2.4, Fase 4) ───────────────────────────────────
+@app.get("/api/field/gap/{cliente_id}")
+def field_gap(cliente_id: str, user: dict = Depends(auth.get_current_user)):
+    """Gap de mix LOCAL (spec D1): categorias que os vizinhos geográficos +
+    de segmento compram e este cliente não. Aplica o escopo via `cliente()`."""
+    data_layer.cliente(cliente_id)
+    return field.gap_cliente(cliente_id)
+
+
+@app.get("/api/field/sugestao/{cliente_id}")
+def field_sugestao(cliente_id: str, user: dict = Depends(auth.get_current_user)):
+    """A pergunta do vendedor de campo: "o que levo para este cliente hoje?"
+    Resposta 100% grounded — nenhum texto gerado livremente, cada número vem
+    do próprio cálculo do gap."""
+    data_layer.cliente(cliente_id)
+    return field.sugestao_para_cliente(cliente_id)
+
+
+@app.get("/api/field/roteiro-do-dia")
+def field_roteiro(filial: str = "", limite: int = 12,
+                  user: dict = Depends(auth.get_current_user)):
+    """Fusão Geo+Sales (spec D1): a fila priorizada de propensão, com o gap
+    de mix local anexado a cada parada."""
+    return field.roteiro_do_dia(filial=filial, limite=limite)
+
+
+@app.post("/api/field/enviar-roteiro")
+def field_enviar_roteiro(filial: str = "", limite: int = 12,
+                         user: dict = Depends(auth.require_admin)):
+    """Envia o roteiro do dia pelo canal de mensageria (spec D2). Sem token
+    WHAPI validado, grava em staging — mesmo formato que o envio real usaria."""
+    r = field.roteiro_do_dia(filial=filial, limite=limite)
+    if not r["disponivel"]:
+        raise HTTPException(409, r["motivo"])
+    conector = ConsoleMessagingConnector()
+    enviados = 0
+    for parada in r["paradas"]:
+        texto = f"Cliente {parada['cliente_id']}: "
+        if parada["gap_de_mix"]:
+            texto += parada["gap_de_mix"][0]["argumento"]
+        else:
+            texto += "sem gap de mix identificado hoje."
+        res = conector.enviar(parada["cliente_id"], texto)
+        enviados += 1 if res.get("enviado") else 0
+    return {"paradas": len(r["paradas"]), "enviados": enviados}
+
+
+class CorrecaoReq(BaseModel):
+    tipo: str
+    detalhe: str = ""
+
+
+@app.post("/api/field/correcao/{cliente_id}")
+def field_correcao(cliente_id: str, body: CorrecaoReq,
+                   user: dict = Depends(auth.get_current_user)):
+    """Divergência reportada em campo (spec D3) — nunca edita o cadastro
+    sozinho, só registra e publica o sinal para o barramento."""
+    data_layer.cliente(cliente_id)
+    try:
+        return field.registrar_correcao(cliente_id, body.tipo, detalhe=body.detalhe)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+class VisitaReq(BaseModel):
+    pedido_gerado: bool
+    itens: list[str] = []
+    motivo_recusa: str = ""
+
+
+@app.post("/api/field/visita/{cliente_id}")
+def field_visita(cliente_id: str, body: VisitaReq,
+                 user: dict = Depends(auth.get_current_user)):
+    data_layer.cliente(cliente_id)
+    return field.registrar_visita(cliente_id, pedido_gerado=body.pedido_gerado,
+                                  itens=body.itens, motivo_recusa=body.motivo_recusa)
+
+
+# ── conectores reais (spec A6/C1/D2) ──────────────────────────────────────
+# Nenhum destes foi validado contra a API real do provedor — sem credencial
+# neste ambiente para testar. `configurado()` degrada honesto quando a env
+# var não está setada, em vez de tentar e falhar com erro confuso.
+@app.get("/api/integracoes/status")
+def integracoes_status(user: dict = Depends(auth.require_admin)):
+    """O que está configurado de verdade neste ambiente — para o admin saber
+    o que vai funcionar antes de tentar."""
+    return {
+        "salesforce": salesforce_real.configurado(),
+        "hubspot": hubspot_real.configurado(),
+        "whapi": whapi_real.configurado(),
+        "newsapi": newsapi_real.configurado(),
+        "agente_llm": agente.configurado(),
+    }
+
+
+@app.post("/api/crm/salesforce/importar")
+def crm_salesforce_importar(user: dict = Depends(auth.require_admin)):
+    if not salesforce_real.configurado():
+        raise HTTPException(409, "Salesforce não configurado (faltam variáveis de ambiente)")
+    return importar(SalesforceConnector())
+
+
+@app.post("/api/crm/hubspot/importar")
+def crm_hubspot_importar(user: dict = Depends(auth.require_admin)):
+    if not hubspot_real.configurado():
+        raise HTTPException(409, "HubSpot não configurado (falta HUBSPOT_ACCESS_TOKEN)")
+    return importar(HubSpotConnector())
+
+
+@app.post("/api/reputacao/newsapi/importar")
+def reputacao_newsapi_importar(termo: str, user: dict = Depends(auth.require_admin)):
+    """`termo` é obrigatório — normalmente o nome do tenant. Sem termo a
+    busca traria manchete do mundo inteiro, não menções à empresa."""
+    if not newsapi_real.configurado():
+        raise HTTPException(409, "NewsAPI não configurada (falta NEWSAPI_KEY)")
+    return reputacao.importar(NewsAPIMentionSource(termo))
+
+
+class EnviarMensagemReq(BaseModel):
+    destinatario: str
+    texto: str
+
+
+@app.post("/api/field/whapi/enviar")
+def field_whapi_enviar(body: EnviarMensagemReq, user: dict = Depends(auth.require_admin)):
+    if not whapi_real.configurado():
+        raise HTTPException(409, "WHAPI não configurado (falta WHAPI_TOKEN)")
+    return WhapiMessagingConnector().enviar(body.destinatario, body.texto)
+
+
+# ── agente A7 (rascunho grounded, spec A7) ────────────────────────────────
+@app.get("/api/agente/rascunho/{cliente_id}")
+def agente_rascunho(cliente_id: str, user: dict = Depends(auth.get_current_user)):
+    """Redige um rascunho de abordagem — NUNCA envia nada sozinho. Enviar é
+    uma chamada separada e explícita (`/api/field/whapi/enviar`), sempre
+    depois de revisão humana do texto e dos fatos usados."""
+    data_layer.cliente(cliente_id)
+    return agente.redigir_abordagem(cliente_id)
+
+
+# ── barramento de sinais (spec D-1/§3.6, Fase 5) ──────────────────────────
+@app.post("/api/sinais/processar")
+def sinais_processar(user: dict = Depends(auth.require_admin)):
+    """Dispara o reactor manualmente. `fila.diaria()` já chama isto sozinha
+    no início — este endpoint existe para inspecionar o efeito sem precisar
+    montar a fila inteira, e para o caso de um scheduler externo preferir
+    processar em cadência própria em vez de sob demanda."""
+    return reactor.processar_pendentes()
+
+
+@app.get("/api/sinais/ajustes/{cliente_id}")
+def sinais_ajustes(cliente_id: str, user: dict = Depends(auth.get_current_user)):
+    """O que o barramento sabe sobre este cliente agora: penalidade
+    acumulada de reputação, e se está sinalizado para sair da fila."""
+    data_layer.cliente(cliente_id)
+    return reactor.ajustes_de_prioridade("cliente", cliente_id)
 
 
 # ── auditoria (§3.7) ─────────────────────────────────────────────────────

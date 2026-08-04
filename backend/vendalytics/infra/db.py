@@ -259,6 +259,74 @@ MIGRATIONS: list[tuple[int, str, str]] = [
             ON contatos(tenant_id, conta_id) WHERE removido_em IS NULL;
         """,
     ),
+    (
+        8,
+        "reputation_intelligence",
+        """
+        -- Menções (spec §2.3 C1). Append-only por natureza de uso (nada aqui
+        -- faz UPDATE), sem trigger forçando: diferente de Score/Sinal, uma
+        -- menção pode legitimamente ser corrigida (reclassificação manual de
+        -- sentimento) sem que isso comprometa auditoria — não é o rastro de
+        -- decisão de um modelo, é o dado de entrada dele.
+        CREATE TABLE IF NOT EXISTS mencoes (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id     TEXT NOT NULL,
+            canal         TEXT NOT NULL,
+            veiculo       TEXT NOT NULL DEFAULT '',
+            url           TEXT NOT NULL DEFAULT '',
+            publicado_em  TEXT NOT NULL,
+            texto         TEXT NOT NULL,
+            alcance       INTEGER NOT NULL DEFAULT 0,
+            sentimento    REAL NOT NULL,        -- -1..1
+            cluster_id    TEXT,                  -- agrupamento de replicação
+            conta_ref     TEXT,                  -- cliente_id, quando casado
+            importado_em  TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_mencoes_tempo ON mencoes(tenant_id, publicado_em);
+        CREATE INDEX IF NOT EXISTS idx_mencoes_conta ON mencoes(tenant_id, conta_ref);
+        CREATE INDEX IF NOT EXISTS idx_mencoes_cluster ON mencoes(tenant_id, cluster_id);
+
+        -- Alertas gerados (anomalia de volume, crise). Append-only: um
+        -- alerta emitido não é apagado nem editado, só substituído por um
+        -- estado novo — é o rastro que sustenta a métrica de TTD (spec §7.3).
+        CREATE TABLE IF NOT EXISTS alertas_reputacao (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id   TEXT NOT NULL,
+            tipo        TEXT NOT NULL,
+            gerado_em   TEXT NOT NULL,
+            janela_de   TEXT NOT NULL,
+            janela_ate  TEXT NOT NULL,
+            volume      INTEGER NOT NULL,
+            volume_esperado REAL,
+            zscore      REAL,
+            detalhe     TEXT NOT NULL DEFAULT '{}'
+        );
+        CREATE INDEX IF NOT EXISTS idx_alertas_tempo ON alertas_reputacao(tenant_id, gerado_em);
+
+        CREATE TRIGGER IF NOT EXISTS alertas_reputacao_sem_update
+            BEFORE UPDATE ON alertas_reputacao
+            BEGIN SELECT RAISE(ABORT, 'alertas_reputacao é append-only'); END;
+        CREATE TRIGGER IF NOT EXISTS alertas_reputacao_sem_delete
+            BEFORE DELETE ON alertas_reputacao
+            BEGIN SELECT RAISE(ABORT, 'alertas_reputacao é append-only'); END;
+        """,
+    ),
+    (
+        9,
+        "reactor_sinais_processados",
+        """
+        -- Rastreio de quais sinais o reactor (spec D-1/§3.6, Fase 5) já
+        -- consumiu. NÃO é uma coluna em `sinais`: a tabela é append-only por
+        -- trigger (nem a própria aplicação pode fazer UPDATE nela), então o
+        -- estado "processado" precisa viver em outro lugar — mantém `sinais`
+        -- imutável de verdade, em vez de imutável só até o primeiro caso de
+        -- uso que precisasse editá-la.
+        CREATE TABLE IF NOT EXISTS sinais_processados (
+            sinal_id     INTEGER PRIMARY KEY REFERENCES sinais(id),
+            processado_em TEXT NOT NULL
+        );
+        """,
+    ),
 ]
 
 

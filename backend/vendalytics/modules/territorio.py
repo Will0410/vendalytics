@@ -25,11 +25,11 @@ antes de existir. Aplicar é um passo separado e explícito.
 """
 from __future__ import annotations
 
-import math
 from collections import defaultdict
 
 from .. import data_layer
 from ..infra import audit
+from ..infra.geo import haversine_km as _haversine_km_impl
 
 # Peso da penalidade geográfica contra o desequilíbrio de potencial. 0 =
 # ignora distância (carteiras equilibradas, vendedor cruzando o estado);
@@ -43,12 +43,7 @@ PESO_DISTANCIA = 0.35
 BONUS_CONTINUIDADE = 0.45
 
 
-def _haversine_km(lat1, lon1, lat2, lon2) -> float:
-    r = 6371.0
-    p1, p2 = math.radians(lat1), math.radians(lat2)
-    dp, dl = math.radians(lat2 - lat1), math.radians(lon2 - lon1)
-    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
-    return 2 * r * math.asin(math.sqrt(a))
+_haversine_km = _haversine_km_impl  # compat: código/testes existentes chamam pelo nome antigo
 
 
 def _potencial_por_cliente(filial: str = "") -> dict[str, float]:

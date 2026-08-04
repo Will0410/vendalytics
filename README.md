@@ -161,6 +161,60 @@ python -m pytest tests -q
 `data_layer` **por reflexão** e reprova qualquer função de leitura nova que
 não passe pelo escopo — sem que ninguém precise lembrar de atualizar o teste.
 
+## Fases 2-5: Geo, Reputation, Field e o barramento de sinais
+
+A arquitetura-alvo está em [docs/gtm-intelligence-platform.md](docs/gtm-intelligence-platform.md).
+Estas fases foram implementadas como **MVP honesto**: zero dependência
+externa paga/com credencial (roteamento, IBGE, mídia, WhatsApp Business,
+LLM), tudo determinístico e testado — com os pontos de troca por dado real
+claramente marcados no código, mesmo padrão já usado para o CRM na Fase 1.
+Construir um conector real sem poder validá-lo contra a API de verdade
+passaria confiança sem lastro; por isso não há chamada real a nenhum
+provedor externo em nenhuma destas fases.
+
+**Geo Intelligence** (`modules/geo.py`) — simulador de ponto candidato com
+score de atratividade ponderado por decaimento de distância (Huff, sobre a
+própria carteira geolocalizada), comparador de similaridade entre filiais e
+preditor de faturamento **sempre com intervalo de confiança** (nunca ponto
+único) e backtest ao lado. Sem H3 nem isócronas reais — `infra/geo.py` usa
+uma grade lat/lon simples e documenta a distorção; a aproximação de
+deslocamento nunca é chamada de "isócrona" na resposta, para não passar
+precisão que o produto não tem.
+
+**Reputation Intelligence** (`modules/reputacao.py`) — sentimento por léxico
+PT-BR com negação simples (heurístico, rotulado como tal em toda saída),
+deduplicação de matéria replicada por shingling+Jaccard, alerta de anomalia
+de volume por z-score contra baseline móvel, share of voice por veículo.
+Ingestão via `integracoes/mentions_base.py` (mesmo contrato do CRM). Quando
+uma menção casa com uma conta conhecida, publica sinal no barramento — é a
+materialização do diferencial D-1.
+
+**Field Execution** (`modules/field.py`) — gap de mix no nível do CLIENTE
+(não da carteira inteira): o que os vizinhos geográficos + de segmento
+compram e este cliente não, a fusão real de Geo com Sales. O "agente
+conversacional" é **100% grounded sem LLM**: todo número do texto vem
+direto do cálculo do gap, nunca gerado livremente — mais restrito que a
+spec original, deliberadamente, na ausência de uma decisão de provedor de
+IA validada. `integracoes/messaging_base.py` é o mesmo padrão de contrato
+do CRM para o canal (WhatsApp/WHAPI real entra depois, sobre a mesma
+interface).
+
+**O barramento de sinais** (`infra/reactor.py`, spec D-1/§3.6) — a prova de
+que os módulos não são silos. `modules/fila.py` (Sales) **nunca importa**
+`reputacao.py` nem `field.py` — só reage a sinais que o reactor publicou.
+Duas regras implementadas: menção muito negativa sobre conta conhecida
+reduz o valor esperado na fila (com o motivo exposto como fator, spec D-2);
+PDV reportado como fechado em visita de campo tira o cliente da fila até a
+curadoria confirmar. Hoje é uma tabela SQLite consultada sob demanda, não
+Kafka — o ponto de troca já está documentado em `infra/scores.py` desde a
+Fase 1 (`emitir_sinal`): trocar o transporte não muda as regras de negócio.
+
+**O que ficou de fora, por decisão, não por esquecimento:** A7 (agente
+orquestrador com LLM) e conectores reais de CRM/mídia/WhatsApp — todos
+exigem uma decisão de provedor e credencial validada que não é minha para
+tomar sozinho; construir isso sem poder testar contra a API real seria
+pior que não construir.
+
 ## Onboarding de um cliente real
 
 1. Copie `config/tenant_config.example.yaml` para `config/tenant_config.yaml` e preencha com os dados do cliente.

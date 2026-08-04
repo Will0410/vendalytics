@@ -56,8 +56,33 @@ CORTEX_API_URL = os.getenv("CORTEX_API_URL", "").strip().rstrip("/")
 CORTEX_TIMEOUT_S = float(os.getenv("CORTEX_TIMEOUT_S", "10"))
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile").strip()
+GROQ_BASE_URL = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1").strip()
+
 WHAPI_TOKEN = os.getenv("WHAPI_TOKEN", "").strip()
 WHAPI_WEBHOOK_SECRET = os.getenv("WHAPI_WEBHOOK_SECRET", "").strip()
+WHAPI_BASE_URL = os.getenv("WHAPI_BASE_URL", "https://gate.whapi.cloud").strip()
+
+# CRM real (spec A6) — nenhum tem valor padrão: ausente = conector
+# `configurado() == False`, degrada honesto (ver integracoes/*_real.py).
+SALESFORCE_LOGIN_URL = os.getenv("SALESFORCE_LOGIN_URL", "https://login.salesforce.com").strip()
+SALESFORCE_CLIENT_ID = os.getenv("SALESFORCE_CLIENT_ID", "").strip()
+SALESFORCE_CLIENT_SECRET = os.getenv("SALESFORCE_CLIENT_SECRET", "").strip()
+SALESFORCE_USERNAME = os.getenv("SALESFORCE_USERNAME", "").strip()
+SALESFORCE_PASSWORD = os.getenv("SALESFORCE_PASSWORD", "").strip()
+SALESFORCE_SECURITY_TOKEN = os.getenv("SALESFORCE_SECURITY_TOKEN", "").strip()
+
+HUBSPOT_ACCESS_TOKEN = os.getenv("HUBSPOT_ACCESS_TOKEN", "").strip()
+HUBSPOT_BASE_URL = os.getenv("HUBSPOT_BASE_URL", "https://api.hubapi.com").strip()
+
+# Mídia/imprensa real (spec C1) — referência sobre NewsAPI.org (REST simples
+# por chave, sem OAuth) por ser o provedor mais acessível para validar depois;
+# trocar por um agregador de clipping licenciado é outro conector no mesmo
+# contrato (`integracoes/mentions_base.py`), não uma mudança de arquitetura.
+NEWSAPI_KEY = os.getenv("NEWSAPI_KEY", "").strip()
+NEWSAPI_BASE_URL = os.getenv("NEWSAPI_BASE_URL", "https://newsapi.org/v2").strip()
+
+HTTP_TIMEOUT_S = float(os.getenv("VENDALYTICS_HTTP_TIMEOUT_S", "15"))
 
 # Banco operacional (usuários + trilha de auditoria). Configurável por env
 # para que teste e ambiente de CI não escrevam no banco real da instalação.

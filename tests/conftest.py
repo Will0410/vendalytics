@@ -60,6 +60,24 @@ def _povoar(caminho: Path) -> None:
 
 
 @contextmanager
+def db_operacional_isolado(nome: str):
+    """Igual a `base_isolada`, mas para o banco OPERACIONAL (usuários,
+    auditoria, scores, sinais, menções, comitê...). `base_isolada` só troca
+    o banco COMERCIAL (`SQLITE_PATH`) — insuficiente para módulos que fazem
+    agregação sobre o operacional (ex.: `reputacao.py` conta volume de
+    menções por dia): sem isolar esse banco também, o total acumulado da
+    sessão de teste inteira contamina a asserção, porque `USERS_DB_PATH` é
+    setado uma vez só, globalmente, no topo deste arquivo.
+    """
+    anterior = config.USERS_DB_PATH
+    config.USERS_DB_PATH = _TMP / f"{nome}_ops.sqlite"
+    try:
+        yield config.USERS_DB_PATH
+    finally:
+        config.USERS_DB_PATH = anterior
+
+
+@contextmanager
 def base_isolada(nome: str):
     """Aponta o adapter para um SQLite próprio deste módulo de teste.
 

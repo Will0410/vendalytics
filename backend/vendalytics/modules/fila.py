@@ -20,7 +20,8 @@ from __future__ import annotations
 
 import time
 
-from ..infra import audit, context, scores as repo
+from ..infra import audit, context, reactor
+from ..infra import scores as repo
 from . import propensao
 
 TIPO_SCORE = "propensao_recompra"
@@ -72,11 +73,42 @@ def diaria(*, filial: str = "", limite: int = 12, persistir: bool = True) -> dic
             "itens": [],
         }
 
+    # Processa sinais pendentes de OUTROS módulos (reputação, campo) antes de
+    # montar a fila — é o barramento unificado (spec D-1) em ação: Sales
+    # nunca importa reputacao.py/field.py, só reage ao que o reactor já
+    # publicou. Idempotente e barato quando não há sinal novo.
+    reactor.processar_pendentes()
+
     pontuados = propensao.pontuar(modelo, filial=filial)
+    ativos, excluidos_por_sinal = [], 0
     for p in pontuados:
         ticket = p["features"]["ticket_medio"]
         p["ticket_medio"] = round(ticket, 2)
         p["valor_esperado"] = round(p["probabilidade"] * ticket, 2)
+        # Decisão do modelo, não calibração: o quanto ele se afasta de "não
+        # sei" (p=0,5). 0,51 é uma moeda; 0,95 ou 0,04 são leituras
+        # decisivas. É um sinal real computado da própria predição — não um
+        # valor inventado para preencher a UI.
+        p["confianca"] = round(2 * abs(p["probabilidade"] - 0.5), 3)
+
+        ajuste = reactor.ajustes_de_prioridade("cliente", p["cliente_id"])
+        if ajuste["sinalizado_para_exclusao"]:
+            # Recomendar visita a um PDV reportado como fechado é pior que
+            # não recomendar nada — sai da fila até a curadoria confirmar.
+            excluidos_por_sinal += 1
+            continue
+        if ajuste["penalidade_pct"]:
+            p["valor_esperado"] = round(p["valor_esperado"] * (1 + ajuste["penalidade_pct"] / 100), 2)
+            # O ajuste vira FATOR visível, não uma penalidade escondida —
+            # spec D-2: toda mudança em um score carrega o motivo exposto.
+            p["fatores"].append({
+                "feature": "sinal_barramento",
+                "rotulo": ajuste["motivos"][0] if ajuste["motivos"] else "ajustado por sinal de outro módulo",
+                "contribuicao": round(ajuste["penalidade_pct"] / 100, 3),
+                "valor_feature": None,
+            })
+        ativos.append(p)
+    pontuados = ativos
 
     pontuados.sort(key=lambda d: d["valor_esperado"], reverse=True)
     selecionados = pontuados[: max(int(limite), 1)]
@@ -110,8 +142,27 @@ def diaria(*, filial: str = "", limite: int = 12, persistir: bool = True) -> dic
             f"recompra suficiente para o modelo aprender."),
         "modelo": {"versao": modelo.versao, **modelo.metricas},
         "total_carteira_pontuada": len(pontuados),
+        # Contas fora da fila porque o barramento sinalizou algo (ex.: PDV
+        # fechado reportado em campo) — visível para não parecer que a
+        # carteira encolheu sozinha.
+        "excluidos_por_sinal_de_campo": excluidos_por_sinal,
         "itens": selecionados,
     }
+
+
+def valores_esperados(*, filial: str = "") -> dict[str, float]:
+    """cliente_id -> valor esperado, para uso fora da fila (ex.: `modules/mapa.py`).
+
+    Não persiste score nem levanta se o modelo estiver indisponível — devolve
+    vazio, e quem chama decide o que fazer com a ausência. Diferente de
+    `diaria()`, que grava e recorta para os N do dia; aqui é o valor bruto
+    para TODA a carteira pontuável, reaproveitando o mesmo modelo em cache.
+    """
+    modelo = _modelo_de(filial)
+    if modelo is None:
+        return {}
+    return {p["cliente_id"]: round(p["probabilidade"] * p["features"]["ticket_medio"], 2)
+            for p in propensao.pontuar(modelo, filial=filial)}
 
 
 def pontuar_cliente(cliente_id: str, *, filial: str = "") -> dict | None:

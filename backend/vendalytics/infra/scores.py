@@ -134,6 +134,59 @@ def ultimo(sujeito_tipo: str, sujeito_id: str, tipo: str) -> dict | None:
     return d
 
 
+def sinais_recentes(sujeito_tipo: str, sujeito_id: str, tipo: str, *, dias: int = 30) -> list[dict]:
+    """Sinais de um tipo, sobre um sujeito, nos últimos N dias — o que
+    `modules/fila.py` consulta para reagir a sinais de outros módulos
+    (reputação, campo) sem importar esses módulos: o acoplamento é só o
+    barramento, que é exatamente o ponto do diferencial D-1."""
+    escopo = context.atual()
+    with db.conexao() as con:
+        rows = con.execute(
+            """SELECT * FROM sinais
+               WHERE tenant_id=? AND sujeito_tipo=? AND sujeito_id=? AND tipo=?
+               AND ocorrido_em >= datetime('now', ?)
+               ORDER BY ocorrido_em DESC""",
+            (escopo.tenant_id, sujeito_tipo, sujeito_id, tipo, f"-{int(dias)} day")).fetchall()
+    saida = []
+    for r in rows:
+        d = dict(r)
+        try:
+            d["payload"] = json.loads(d.get("payload") or "{}")
+        except (ValueError, TypeError):
+            pass
+        saida.append(d)
+    return saida
+
+
+def sinais_nao_processados(*, limit: int = 500) -> list[dict]:
+    """Sinais do tenant corrente ainda não vistos pelo reactor (spec §3.6:
+    "consumidores independentes por módulo"). O estado de leitura vive em
+    `sinais_processados`, não em `sinais` — ver a migration para o porquê."""
+    escopo = context.atual()
+    with db.conexao() as con:
+        rows = con.execute(
+            """SELECT * FROM sinais
+               WHERE tenant_id=? AND id NOT IN (SELECT sinal_id FROM sinais_processados)
+               ORDER BY id ASC LIMIT ?""",
+            (escopo.tenant_id, min(int(limit), 5000))).fetchall()
+    saida = []
+    for r in rows:
+        d = dict(r)
+        try:
+            d["payload"] = json.loads(d.get("payload") or "{}")
+        except (ValueError, TypeError):
+            pass
+        saida.append(d)
+    return saida
+
+
+def marcar_processado(sinal_id: int) -> None:
+    with db.conexao() as con:
+        con.execute(
+            "INSERT OR IGNORE INTO sinais_processados (sinal_id, processado_em) VALUES (?, datetime('now'))",
+            (sinal_id,))
+
+
 def historico(sujeito_tipo: str, sujeito_id: str, tipo: str, limit: int = 30) -> list[dict]:
     """Série de um score ao longo do tempo — a resposta a "por que mudou?"."""
     escopo = context.atual()
