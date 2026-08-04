@@ -1,0 +1,5 @@
+-r requirements.txt
+
+# Suíte de testes da Fase 0 (isolamento de escopo, auditoria, migrations).
+pytest>=8.0
+httpx>=0.27          # exigido pelo fastapi.testclient

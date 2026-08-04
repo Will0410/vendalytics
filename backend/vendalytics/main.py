@@ -10,24 +10,54 @@ import logging
 import os
 from pathlib import Path
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import auth, config, data_layer, tenant
-from .modules import executivo, metrics, mix, recompra
+from .infra import audit, context, db, middleware, telemetry
+from .modules import executivo, mercado, metrics, mix, recompra
 
-logging.basicConfig(level=logging.INFO)
+telemetry.configurar_logging(logging.INFO, json_logs=not config.DEMO_MODE)
 log = logging.getLogger("vendalytics")
 
 app = FastAPI(title="Vendalytics")
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
+# Abre o escopo de acesso do request. Registrado por último para rodar por
+# fora do CORS, de modo que até a resposta de erro carregue o X-Request-Id.
+app.add_middleware(
+    middleware.EscopoMiddleware,
+    resolver_usuario=auth.usuario_do_token,
+    tenant_id=lambda: tenant.carregar().nome_curto,
+)
+
+
+@app.exception_handler(context.EscopoNegado)
+def _escopo_negado(request: Request, exc: context.EscopoNegado):
+    """403 — o usuário está autenticado, mas pediu algo fora do recorte dele.
+    A tentativa já foi registrada na trilha por quem levantou."""
+    return JSONResponse(status_code=403, content={"erro": str(exc)})
+
+
+@app.exception_handler(context.EscopoAusente)
+def _escopo_ausente(request: Request, exc: context.EscopoAusente):
+    """500 — não é erro do usuário: é um endpoint que leu dado sem escopo
+    ativo. Devolve genérico para fora e grita no log para dentro, porque em
+    produção isso significa que um caminho novo escapou do enforcement."""
+    log.error("Endpoint sem escopo ativo em %s: %s", request.url.path, exc)
+    audit.registrar("escopo.ausente", recurso=request.url.path, resultado=audit.ERRO,
+                    detalhe={"erro": str(exc)})
+    return JSONResponse(status_code=500, content={"erro": "erro interno"})
+
 
 @app.on_event("startup")
 def _startup():
+    versao = db.migrar()
+    log.info("Schema operacional na versão %s.", versao)
     auth.garantir_admin()
     # Log seguro: não imprimir valores sensíveis, apenas presença/contagem
     jwt_present = bool((os.getenv("JWT_SECRET") or "").strip())
@@ -62,12 +92,17 @@ def _seed_demo_se_vazio() -> None:
         return
 
     config.SQLITE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    try:
-        with closing(sqlite3.connect(str(config.SQLITE_PATH))) as con:
-            gerar(con)
-        log.info("Base de demonstração gerada em %s.", config.SQLITE_PATH)
-    except Exception as e:
-        log.error("Falha ao gerar base de demonstração: %s", e)
+    escopo = context.escopo_de_sistema(tenant.carregar().nome_curto, motivo="seed-demo")
+    with context.ativar(escopo):
+        try:
+            with closing(sqlite3.connect(str(config.SQLITE_PATH))) as con:
+                gerar(con)
+            log.info("Base de demonstração gerada em %s.", config.SQLITE_PATH)
+            audit.registrar("dados.seed_demo", recurso=str(config.SQLITE_PATH))
+        except Exception as e:
+            log.error("Falha ao gerar base de demonstração: %s", e)
+            audit.registrar("dados.seed_demo", recurso=str(config.SQLITE_PATH),
+                            resultado=audit.ERRO, detalhe={"erro": str(e)})
 
 
 # ── auth ──────────────────────────────────────────────────────────────
@@ -144,10 +179,52 @@ def executivo_overview(filial: str = "", user: dict = Depends(auth.get_current_u
     return executivo.overview(filial=filial)
 
 
+# ── território / TAM-SAM-SOM (spec §2.1 A2) ─────────────────────────────
+@app.get("/api/territorio/cobertura")
+def territorio_cobertura(filial: str = "", user: dict = Depends(auth.get_current_user)):
+    """SOM: cobertura própria por município/segmento. Sempre disponível."""
+    return mercado.cobertura(filial=filial)
+
+
+@app.get("/api/territorio/tam-sam-som")
+def territorio_tam_sam_som(filial: str = "", segmento: str = "", uf: str = "",
+                           user: dict = Depends(auth.get_current_user)):
+    """TAM→SAM→SOM + whitespace por município. `tam_disponivel=false` e
+    `aviso` preenchido quando não há fonte externa de universo configurada
+    (CORTEX_API_URL) — nunca finge whitespace=0 por falta de dado."""
+    return mercado.tam_sam_som(filial=filial, segmento=segmento, uf=uf)
+
+
+# ── auditoria (§3.7) ─────────────────────────────────────────────────────
+@app.get("/api/auditoria")
+def auditoria(limit: int = 200, usuario: str = "", acao: str = "", resultado: str = "",
+              user: dict = Depends(auth.require_admin)):
+    """Trilha exportável pelo próprio cliente, sem depender de acesso ao banco.
+    A consulta da trilha também é registrada na trilha — quem audita é
+    auditado, senão o log de acessos tem um ponto cego do tamanho do admin."""
+    audit.registrar("auditoria.consultar",
+                    detalhe={"filtros": {"usuario": usuario, "acao": acao,
+                                         "resultado": resultado}})
+    return {"eventos": audit.consultar(limit=limit, usuario=usuario, acao=acao,
+                                       resultado=resultado)}
+
+
 # ── diagnóstico (sem auth — health check simples) ───────────────────────
 @app.get("/api/health")
 def health():
-    return {"ok": True, "adapter": config.ADAPTER_ATIVO, "dado_disponivel": data_layer.disponivel()}
+    return {
+        "ok": True,
+        "adapter": config.ADAPTER_ATIVO,
+        "dado_disponivel": data_layer.disponivel(),
+        "schema_versao": db.versao_aplicada(),
+    }
+
+
+@app.get("/api/metrics/runtime")
+def metrics_runtime(user: dict = Depends(auth.require_admin)):
+    """Latência p50/p95 e contagem por rota, da janela em memória. Só admin:
+    o mapa de rotas e o volume de uso são informação operacional."""
+    return telemetry.snapshot()
 
 
 # Endpoint de debug seguro (ativa apenas em DEMO_MODE). Retorna apenas se o

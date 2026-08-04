@@ -19,6 +19,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 
 from . import config, tenant
+from .infra import audit, db
 
 log = logging.getLogger("vendalytics.auth")
 _bearer = HTTPBearer(auto_error=False)
@@ -33,24 +34,14 @@ def _verificar_senha(senha: str, hash_: str) -> bool:
 
 
 def _con() -> sqlite3.Connection:
-    con = sqlite3.connect(str(config.USERS_DB_PATH), timeout=10)
-    con.row_factory = sqlite3.Row
-    return con
+    return db.conectar()
 
 
 def init_db() -> None:
-    with closing(_con()) as con:
-        con.execute("""
-            CREATE TABLE IF NOT EXISTS usuarios (
-                email TEXT PRIMARY KEY,
-                senha_hash TEXT NOT NULL,
-                nome TEXT NOT NULL,
-                role TEXT NOT NULL DEFAULT 'user',
-                filiais TEXT DEFAULT '',
-                criado_em TEXT NOT NULL
-            )
-        """)
-        con.commit()
+    """O schema agora vem das migrations versionadas (infra/db.py) em vez de
+    um CREATE TABLE solto aqui — assim há uma resposta para "em que versão
+    este ambiente está?" e para "como adiciono uma coluna?"."""
+    db.migrar()
 
 
 def _tem_usuarios() -> bool:
@@ -88,10 +79,22 @@ def criar_usuario(email: str, senha: str, *, nome: str, role: str = "user", fili
 
 def autenticar(email: str, senha: str) -> dict:
     init_db()
+    email_norm = email.strip().lower()
     with closing(_con()) as con:
-        r = con.execute("SELECT * FROM usuarios WHERE email=?", (email.strip().lower(),)).fetchone()
+        r = con.execute("SELECT * FROM usuarios WHERE email=?", (email_norm,)).fetchone()
     if not r or not _verificar_senha(senha, r["senha_hash"]):
+        # Tentativa falha vai para a trilha: é o sinal que distingue erro de
+        # digitação de ataque de força bruta. Sem e-mail existente/inexistente
+        # no detalhe, para não transformar a trilha em oráculo de usuários.
+        audit.registrar("auth.login", recurso=email_norm, resultado=audit.NEGADO,
+                        detalhe={"motivo": "credenciais inválidas"})
         raise HTTPException(401, "e-mail ou senha inválidos")
+    with closing(_con()) as con:
+        con.execute("UPDATE usuarios SET ultimo_acesso=? WHERE email=?",
+                    (datetime.now(timezone.utc).isoformat(), email_norm))
+        con.commit()
+    audit.registrar("auth.login", recurso=email_norm,
+                    detalhe={"role": r["role"], "filiais": r["filiais"]})
     payload = {
         "sub": r["email"], "name": r["nome"], "role": r["role"], "filiais": r["filiais"],
         "exp": datetime.now(timezone.utc) + timedelta(hours=config.JWT_EXPIRA_HORAS),
@@ -100,15 +103,27 @@ def autenticar(email: str, senha: str) -> dict:
     return {"token": token, "email": r["email"], "nome": r["nome"], "role": r["role"]}
 
 
+def usuario_do_token(token: str) -> dict | None:
+    """Decodifica um token sem levantar — devolve None se inválido.
+
+    Usado pelo middleware de escopo, que precisa saber QUEM é sem decidir se
+    o request pode seguir: a decisão de exigir autenticação continua sendo do
+    `Depends(get_current_user)` de cada endpoint, num lugar só."""
+    try:
+        payload = jwt.decode(token, config.get_jwt_secret(), algorithms=[config.JWT_ALGO])
+    except JWTError:
+        return None
+    return {"email": payload["sub"], "name": payload.get("name", ""),
+            "role": payload.get("role", "user"), "filiais": payload.get("filiais", "")}
+
+
 def get_current_user(cred: HTTPAuthorizationCredentials | None = Depends(_bearer)) -> dict:
     if cred is None:
         raise HTTPException(401, "faltando token de autenticação")
-    try:
-        payload = jwt.decode(cred.credentials, config.get_jwt_secret(), algorithms=[config.JWT_ALGO])
-    except JWTError:
+    user = usuario_do_token(cred.credentials)
+    if user is None:
         raise HTTPException(401, "token inválido ou expirado")
-    return {"email": payload["sub"], "name": payload.get("name", ""),
-            "role": payload.get("role", "user"), "filiais": payload.get("filiais", "")}
+    return user
 
 
 def require_admin(user: dict = Depends(get_current_user)) -> dict:

@@ -50,8 +50,15 @@ TENANT_CONFIG_PATH = Path(os.getenv("VENDALYTICS_TENANT_CONFIG", str(PROJECT_ROO
 
 DEMO_MODE = os.getenv("DEMO_MODE", "true").strip().lower() in ("1", "true", "yes")
 
+# Fonte externa OPCIONAL de universo de mercado (TAM), p/ Território (A2).
+# Vazio = módulo de Território opera só com cobertura própria (SOM), sem TAM.
+CORTEX_API_URL = os.getenv("CORTEX_API_URL", "").strip().rstrip("/")
+CORTEX_TIMEOUT_S = float(os.getenv("CORTEX_TIMEOUT_S", "10"))
+
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
 WHAPI_TOKEN = os.getenv("WHAPI_TOKEN", "").strip()
 WHAPI_WEBHOOK_SECRET = os.getenv("WHAPI_WEBHOOK_SECRET", "").strip()
 
-USERS_DB_PATH = PROJECT_ROOT / "usuarios.sqlite"
+# Banco operacional (usuários + trilha de auditoria). Configurável por env
+# para que teste e ambiente de CI não escrevam no banco real da instalação.
+USERS_DB_PATH = Path(os.getenv("VENDALYTICS_USERS_DB", str(PROJECT_ROOT / "usuarios.sqlite")))
