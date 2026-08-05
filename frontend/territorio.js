@@ -5,6 +5,54 @@ document.getElementById("btn-sair").addEventListener("click", (e) => {
   e.preventDefault(); sair();
 });
 
+// ── Visão nacional (IBGE, 27 UFs de uma vez) ────────────────────────────────
+let estadosNacional = [];
+let ordemNacional = { coluna: "populacao", asc: false };
+
+function fmtNum(v) { return v == null ? "—" : v.toLocaleString("pt-BR"); }
+function fmtReais(v) { return v == null ? "—" : "R$ " + Math.round(v).toLocaleString("pt-BR"); }
+
+function renderTabelaNacional() {
+  const el = document.getElementById("nacional-tabela");
+  const cols = [
+    { key: "uf_nome", rotulo: "Estado", fmt: v => v },
+    { key: "populacao", rotulo: "População", fmt: fmtNum },
+    { key: "pib_per_capita_reais", rotulo: "PIB per capita/ano", fmt: fmtReais },
+    { key: "empresas_atuantes_total", rotulo: "Empresas atuantes", fmt: fmtNum },
+  ];
+  const ordenados = [...estadosNacional].sort((a, b) => {
+    const va = a[ordemNacional.coluna], vb = b[ordemNacional.coluna];
+    if (va == null) return 1;
+    if (vb == null) return -1;
+    const cmp = typeof va === "string" ? va.localeCompare(vb) : va - vb;
+    return ordemNacional.asc ? cmp : -cmp;
+  });
+  el.innerHTML = `<table class="tabela-simples"><thead><tr>
+      ${cols.map(c => `<th style="cursor:pointer" data-col="${c.key}">${c.rotulo}${ordemNacional.coluna === c.key ? (ordemNacional.asc ? " ▲" : " ▼") : ""}</th>`).join("")}
+    </tr></thead><tbody>
+      ${ordenados.map(e => `<tr>${cols.map(c => `<td>${c.fmt(e[c.key])}</td>`).join("")}</tr>`).join("")}
+    </tbody></table>`;
+  el.querySelectorAll("th[data-col]").forEach(th => th.addEventListener("click", () => {
+    const col = th.dataset.col;
+    ordemNacional = col === ordemNacional.coluna
+      ? { coluna: col, asc: !ordemNacional.asc } : { coluna: col, asc: false };
+    renderTabelaNacional();
+  }));
+}
+
+async function carregarVisaoNacional() {
+  const el = document.getElementById("nacional-tabela");
+  try {
+    const r = await api("/api/territorio/visao-nacional");
+    estadosNacional = r.estados;
+    renderTabelaNacional();
+  } catch (e) {
+    el.innerHTML = erroComRetry(`Falha ao carregar visão nacional: ${e.message}`, carregarVisaoNacional);
+  }
+}
+
+carregarVisaoNacional();
+
 function gaugeSVG(valor, max, cor, rotulo) {
   const r = 30, circ = 2 * Math.PI * r;
   const pct = max > 0 ? Math.min(Math.max(valor / max, 0), 1) : 0;

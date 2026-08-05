@@ -187,6 +187,60 @@ def empresas_atuantes_total(municipio_ibge_id: int) -> dict | None:
         return None
 
 
+def visao_nacional() -> list[dict] | None:
+    """População, PIB per capita e total de empresas atuantes das 27
+    Unidades da Federação (todos os estados + DF) — visão do país inteiro
+    de uma vez, 3 chamadas reais ao IBGE (`localidades=N3[all]`), não 27×3.
+    `None` só se a fonte estiver fora do ar; um estado sem 1 dos 3 números
+    aparece com esse campo em `None`, nunca com um valor inventado."""
+    if not configurado():
+        return None
+    try:
+        r_pop = httpx.get(f"{BASE_AGREGADOS}/{AGREGADO_POPULACAO}/periodos/-1/variaveis/{VARIAVEL_POPULACAO}",
+                          params={"localidades": "N3[all]"}, timeout=config.HTTP_TIMEOUT_S)
+        r_pib = httpx.get(f"{BASE_AGREGADOS}/{AGREGADO_PIB}/periodos/-1/variaveis/{VARIAVEL_PIB_TOTAL}",
+                          params={"localidades": "N3[all]"}, timeout=config.HTTP_TIMEOUT_S)
+        r_emp = httpx.get(f"{BASE_AGREGADOS}/{AGREGADO_EMPRESAS}/periodos/-1/variaveis/{VARIAVEL_EMPRESAS_ATUANTES}",
+                          params={"localidades": "N3[all]", "classificacao": f"12762[{CATEGORIA_CNAE_TOTAL}]"},
+                          timeout=config.HTTP_TIMEOUT_S)
+        for resp in (r_pop, r_pib, r_emp):
+            resp.raise_for_status()
+    except httpx.HTTPError as e:
+        log.warning("IBGE indisponível (visão nacional): %s", e)
+        return None
+
+    def _por_uf(resp) -> dict[str, tuple[int, float | None]]:
+        saida = {}
+        for serie in resp.json()[0]["resultados"][0]["series"]:
+            nome_uf = serie["localidade"]["nome"]
+            valores = serie["serie"]
+            if not valores:
+                continue
+            ano, valor = next(iter(valores.items()))
+            saida[nome_uf] = (int(ano), None if valor in ("-", "..", "X", None) else float(valor))
+        return saida
+
+    pop_por_uf, pib_por_uf, emp_por_uf = _por_uf(r_pop), _por_uf(r_pib), _por_uf(r_emp)
+
+    saida = []
+    for nome_uf in sorted(set(pop_por_uf) | set(pib_por_uf) | set(emp_por_uf)):
+        _, pop = pop_por_uf.get(nome_uf, (None, None))
+        ano_pib, pib_mil = pib_por_uf.get(nome_uf, (None, None))
+        ano_emp, emp = emp_por_uf.get(nome_uf, (None, None))
+        pib_total_reais = pib_mil * 1000 if pib_mil is not None else None
+        saida.append({
+            "uf_nome": nome_uf,
+            "populacao": int(pop) if pop is not None else None,
+            "pib_total_reais": pib_total_reais,
+            "pib_per_capita_reais": (round(pib_total_reais / pop, 2)
+                                     if pib_total_reais is not None and pop else None),
+            "pib_ano_referencia": ano_pib,
+            "empresas_atuantes_total": int(emp) if emp is not None else None,
+            "empresas_atuantes_ano_referencia": ano_emp,
+        })
+    return saida
+
+
 def camada_para_ponto(municipio: str, uf: str) -> dict:
     """Interface que `modules/geo.py` consome: uma camada sociodemográfica
     para um município, ou `disponivel:false` honesto — nunca inventa

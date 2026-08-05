@@ -115,6 +115,31 @@ def test_consultar_lote_vazio_nao_chama_rede(monkeypatch):
 
 
 # ── endpoints HTTP ──────────────────────────────────────────────────────────
+def test_http_territorio_visao_nacional_exige_auth(cliente_http):
+    assert cliente_http.get("/api/territorio/visao-nacional").status_code == 401
+
+
+def test_http_territorio_visao_nacional_responde_com_mock(cliente_http, token_admin, monkeypatch):
+    from vendalytics.sources import ibge_real as ibge_mod
+    monkeypatch.setattr(ibge_mod, "visao_nacional",
+                        lambda: [{"uf_nome": "São Paulo", "populacao": 45_000_000,
+                                  "pib_total_reais": 1e12, "pib_per_capita_reais": 22000.0,
+                                  "pib_ano_referencia": 2023, "empresas_atuantes_total": 3_000_000,
+                                  "empresas_atuantes_ano_referencia": 2024}])
+    h = {"Authorization": f"Bearer {token_admin}"}
+    r = cliente_http.get("/api/territorio/visao-nacional", headers=h)
+    assert r.status_code == 200
+    assert len(r.json()["estados"]) == 1
+
+
+def test_http_territorio_visao_nacional_502_se_ibge_fora_do_ar(cliente_http, token_admin, monkeypatch):
+    from vendalytics.sources import ibge_real as ibge_mod
+    monkeypatch.setattr(ibge_mod, "visao_nacional", lambda: None)
+    h = {"Authorization": f"Bearer {token_admin}"}
+    r = cliente_http.get("/api/territorio/visao-nacional", headers=h)
+    assert r.status_code == 502
+
+
 def test_http_territorio_municipios_exige_auth(cliente_http):
     assert cliente_http.get("/api/territorio/municipios?uf=PR").status_code == 401
 

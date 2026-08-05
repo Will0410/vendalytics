@@ -305,6 +305,17 @@ def territorio_municipios(uf: str, user: dict = Depends(auth.get_current_user)):
     return {"uf": uf.upper(), "municipios": municipios}
 
 
+@app.get("/api/territorio/visao-nacional")
+def territorio_visao_nacional(user: dict = Depends(auth.get_current_user)):
+    """As 27 Unidades da Federação de uma vez — população, PIB per capita e
+    total de empresas atuantes, todos reais e atualizados (IBGE). Visão do
+    país inteiro sem precisar escolher UF/município um de cada vez."""
+    dados = ibge_real.visao_nacional()
+    if dados is None:
+        raise HTTPException(502, "IBGE indisponível no momento")
+    return {"estados": dados}
+
+
 @app.get("/api/territorio/municipio-info")
 def territorio_municipio_info(municipio: str, uf: str, user: dict = Depends(auth.get_current_user)):
     """População + PIB per capita + total de empresas atuantes (todos os

@@ -66,6 +66,17 @@ def test_pib_per_capita_de_curitiba_e_plausivel():
 
 
 @pytest.mark.network
+def test_visao_nacional_traz_as_27_unidades_da_federacao():
+    r = ibge_real.visao_nacional()
+    assert r is not None
+    assert len(r) == 27
+    sp = next(e for e in r if e["uf_nome"] == "São Paulo")
+    assert sp["populacao"] > 40_000_000  # SP é o estado mais populoso
+    assert sp["pib_per_capita_reais"] > 0
+    assert sp["empresas_atuantes_total"] > 0
+
+
+@pytest.mark.network
 def test_empresas_atuantes_total_de_curitiba_e_plausivel():
     r = ibge_real.empresas_atuantes_total(4106902)
     assert r is not None
@@ -100,6 +111,7 @@ def test_ibge_fora_do_ar_nao_levanta(monkeypatch):
     assert ibge_real.pib_total(4106902) is None
     assert ibge_real.pib_per_capita(4106902) is None
     assert ibge_real.empresas_atuantes_total(4106902) is None
+    assert ibge_real.visao_nacional() is None
 
 
 def test_empresas_atuantes_com_dado_suprimido_e_none(monkeypatch):
