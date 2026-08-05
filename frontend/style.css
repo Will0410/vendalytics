@@ -73,70 +73,74 @@ body {
 .bg-gradient { display: none; }
 
 /* ── Header ─────────────────────────────────────────────────── */
-.topo {
+/* ── App Shell / Sidebar ────────────────────────────────────── */
+.app-shell {
+  display: flex;
+  align-items: stretch;
+  min-height: 100vh;
+  position: relative;
+  z-index: 1;
+}
+
+.sidebar {
+  width: 216px;
+  flex-shrink: 0;
   position: sticky;
   top: 0;
-  z-index: 100;
+  height: 100vh;
   display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3) var(--space-6);
-  background: #ffffff;
-  border-bottom: 1px solid var(--glass-border);
+  flex-direction: column;
+  background: var(--text-1);
+  padding: var(--space-5) var(--space-3);
+  gap: var(--space-2);
 }
 
-.topo .logo {
+.sidebar-brand { padding: 0 var(--space-2) var(--space-5); }
+
+.sidebar-brand .logo {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 18px;
-  background: var(--primary-gradient);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  font-size: 17px;
+  color: #ffffff;
   letter-spacing: -0.02em;
-  position: relative;
 }
 
-.topo .logo::after {
-  content: '';
-  position: absolute;
-  bottom: -2px;
-  left: 0;
-  width: 100%;
-  height: 2px;
-  background: var(--primary-gradient);
-  border-radius: 1px;
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform 0.4s var(--ease);
-}
-
-.topo .logo:hover::after { transform: scaleX(1); }
-
-.topo .nav {
-  margin-left: auto;
+.sidebar-nav {
   display: flex;
-  gap: var(--space-4);
-  font-size: 13px;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
 }
 
-.topo .nav a {
-  color: var(--text-3);
-  text-decoration: none;
-  font-weight: 600;
-  padding: var(--space-1) var(--space-3);
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
   border-radius: var(--radius-xs);
-  transition: color 0.2s var(--ease), background 0.2s var(--ease);
-  position: relative;
+  color: #94a3b8;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 600;
+  transition: color 0.15s var(--ease), background 0.15s var(--ease);
 }
 
-.topo .nav a:hover { color: var(--text-1); background: #f1f5f9; }
+.nav-item svg { width: 18px; height: 18px; flex-shrink: 0; }
 
-.topo .nav a.on {
-  color: #fff;
-  background: var(--primary-gradient);
-  box-shadow: 0 2px 12px var(--primary-glow);
+.nav-item:hover { color: #f1f5f9; background: rgba(255,255,255,0.06); }
+
+.nav-item.on {
+  color: #ffffff;
+  background: var(--cor-primaria);
 }
+
+.nav-item.nav-sair {
+  margin-top: var(--space-3);
+  border-top: 1px solid rgba(255,255,255,0.08);
+  padding-top: calc(var(--space-3) + 9px);
+}
+
+.app-shell > main { flex: 1; min-width: 0; }
 
 /* ── Hero KPI Strip ─────────────────────────────────────────── */
 .kpis {
@@ -1022,8 +1026,17 @@ body {
 
 /* ── Responsive ─────────────────────────────────────────────── */
 @media (max-width: 768px) {
-  .topo { padding: var(--space-2) var(--space-4); }
-  .topo .nav { gap: var(--space-2); font-size: 12px; }
+  .app-shell { flex-direction: column; }
+  .sidebar {
+    width: 100%; height: auto; position: sticky; top: 0; z-index: 100;
+    flex-direction: row; align-items: center; padding: var(--space-2) var(--space-3);
+    overflow-x: auto;
+  }
+  .sidebar-brand { padding: 0 var(--space-3) 0 0; }
+  .sidebar-nav { flex-direction: row; }
+  .nav-item span { display: none; }
+  .nav-item { padding: 8px; }
+  .nav-item.nav-sair { margin-top: 0; margin-left: auto; border-top: none; padding-top: 8px; }
   .kpis { padding: var(--space-4); grid-template-columns: repeat(2, 1fr); gap: var(--space-3); }
   .kpi { padding: var(--space-3) var(--space-4); }
   .kpi b { font-size: 20px; }
@@ -1043,7 +1056,6 @@ body {
 @media (max-width: 480px) {
   .kpis { grid-template-columns: 1fr; }
   .gauges { grid-template-columns: 1fr 1fr; }
-  .topo .nav a { padding: var(--space-1) var(--space-2); font-size: 11px; }
 }
 
 /* ── Scrollbar ──────────────────────────────────────────────── */
