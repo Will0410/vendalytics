@@ -77,6 +77,28 @@ def criar_usuario(email: str, senha: str, *, nome: str, role: str = "user", fili
         con.commit()
 
 
+def redefinir_senha(email: str, senha: str, *, nome: str = "Administrador",
+                    role: str = "admin") -> None:
+    """Upsert de credencial: atualiza a senha se o e-mail já existe, cria o
+    usuário se não existe. Usado pelo reset via env var no startup (ver
+    main.py) — o caminho de recuperação quando a senha aleatória do
+    bootstrap se perde e não há acesso a Shell (planos free do Render não
+    oferecem)."""
+    init_db()
+    email_norm = email.strip().lower()
+    with closing(_con()) as con:
+        cur = con.execute(
+            "UPDATE usuarios SET senha_hash=? WHERE email=?",
+            (_hash_senha(senha), email_norm))
+        if cur.rowcount == 0:
+            con.execute(
+                "INSERT INTO usuarios (email, senha_hash, nome, role, filiais, criado_em) "
+                "VALUES (?,?,?,?,?,?)",
+                (email_norm, _hash_senha(senha), nome, role, "",
+                 datetime.now(timezone.utc).isoformat()))
+        con.commit()
+
+
 def autenticar(email: str, senha: str) -> dict:
     init_db()
     email_norm = email.strip().lower()

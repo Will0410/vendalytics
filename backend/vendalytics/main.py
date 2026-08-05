@@ -72,6 +72,7 @@ def _startup():
     versao = db.migrar()
     log.info("Schema operacional na versão %s.", versao)
     auth.garantir_admin()
+    _resetar_senha_via_env_se_pedido()
     # Log seguro: não imprimir valores sensíveis, apenas presença/contagem
     jwt_present = bool((os.getenv("JWT_SECRET") or "").strip())
     env_keys = [k for k in os.environ.keys() if k in ("JWT_SECRET",) or k.endswith("SECRET") or k.endswith("_KEY")]
@@ -86,6 +87,29 @@ def _startup():
                 "Fonte de dados sem dado carregado — rode "
                 "`python -m demo_data.seed` para gerar a base de demonstração.")
     _prequecer_modelo_de_propensao()
+
+
+def _resetar_senha_via_env_se_pedido() -> None:
+    """Caminho de recuperação de senha para planos free do Render, que não
+    oferecem Shell/One-Off Jobs: se ADMIN_RESET_EMAIL e ADMIN_RESET_PASSWORD
+    estiverem definidas no ambiente, aplica essa senha ao e-mail indicado
+    (cria o usuário se ainda não existir) a cada boot.
+
+    Roda em TODO restart enquanto essas variáveis continuarem no ambiente —
+    por isso o log abaixo insiste para removê-las assim que o login for
+    confirmado: senha em texto puro num painel de env vars é exatamente o
+    tipo de exposição que já aconteceu antes neste projeto."""
+    email = os.getenv("ADMIN_RESET_EMAIL", "").strip()
+    senha = os.getenv("ADMIN_RESET_PASSWORD", "").strip()
+    if not email or not senha:
+        return
+    auth.redefinir_senha(email, senha)
+    log.warning(
+        "Senha redefinida via ADMIN_RESET_EMAIL/ADMIN_RESET_PASSWORD para %s. "
+        "REMOVA essas duas variáveis de ambiente agora que o login funciona — "
+        "elas ficam visíveis em texto puro no painel do Render e serão "
+        "reaplicadas a cada novo deploy/restart enquanto continuarem lá.",
+        email)
 
 
 def _prequecer_modelo_de_propensao() -> None:

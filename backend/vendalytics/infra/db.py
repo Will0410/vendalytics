@@ -629,6 +629,10 @@ class _CursorPostgres:
     def fetchall(self):
         return self._cur.fetchall()
 
+    @property
+    def rowcount(self):
+        return self._cur.rowcount
+
 
 class _ConexaoPostgres:
     """Faz `con.execute(sql_com_?, params)` funcionar sobre psycopg, que
