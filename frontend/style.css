@@ -725,6 +725,9 @@ body {
   border-radius: var(--radius);
 }
 
+.skeleton-kpi { height: 52px; border-radius: var(--radius-sm); }
+.skeleton-row { height: 16px; margin: 6px 0; }
+
 /* ── Login Page ─────────────────────────────────────────────── */
 .tela-login {
   display: flex;

@@ -107,10 +107,16 @@ function popularUFs() {
   sel.innerHTML = `<option value="">UF</option>` + UFS.map(u => `<option value="${u}">${u}</option>`).join("");
 }
 
+function skeletonKpis(n) {
+  return Array.from({ length: n }, () =>
+    `<div class="praca-kpi"><div class="skeleton skeleton-kpi"></div></div>`).join("");
+}
+
 async function carregarMunicipiosDaUf(uf) {
   const selMun = document.getElementById("praca-municipio");
   if (!uf) { selMun.innerHTML = `<option value="">Selecione a UF primeiro</option>`; return; }
   selMun.innerHTML = `<option value="">Carregando…</option>`;
+  document.getElementById("praca-kpis").innerHTML = skeletonKpis(4);
   try {
     const r = await api(`/api/territorio/municipios?uf=${uf}`);
     municipiosDaUf = r.municipios;
@@ -119,40 +125,43 @@ async function carregarMunicipiosDaUf(uf) {
     renderPracaKpis(uf, null);
   } catch (e) {
     selMun.innerHTML = `<option value="">Falha ao carregar municípios</option>`;
+    renderPracaKpis(uf, null);
   }
 }
 
+// Sempre 4 cards fixos (UF, praça, código IBGE, municípios na UF) + os que
+// só existem depois de escolher um município (população, carteira aqui) —
+// nunca menos que 4, mesmo antes de qualquer seleção.
 async function renderPracaKpis(uf, municipioNome) {
   const el = document.getElementById("praca-kpis");
-  const cards = [
-    { rotulo: "Municípios na UF", valor: municipiosDaUf.length || "—" },
+  const base = [
+    { rotulo: "UF selecionada", valor: uf || "—" },
+    { rotulo: "Praça selecionada", valor: municipioNome ? `${municipioNome}/${uf}` : "nenhuma ainda" },
+    { rotulo: "Município IBGE", valor: uf ? municipiosDaUf.length : "—" },
+    { rotulo: "Código IBGE", valor: "—" },
   ];
 
-  if (municipioNome) {
-    cards.unshift({ rotulo: "Praça selecionada", valor: `${municipioNome}/${uf}` });
-    el.innerHTML = renderCards([...cards,
-      { rotulo: "População (IBGE)", valor: "…" },
-      { rotulo: "Empresas na carteira aqui", valor: "…" }]);
+  if (!municipioNome) { el.innerHTML = renderCards(base); return; }
 
-    const [info, cobertura] = await Promise.all([
-      api(`/api/territorio/municipio-info?municipio=${encodeURIComponent(municipioNome)}&uf=${uf}`).catch(() => null),
-      api(`/api/territorio/cobertura`).catch(() => null),
-    ]);
+  el.innerHTML = renderCards(base) + skeletonKpis(2);
 
-    const populacao = info && info.disponivel
-      ? info.populacao.toLocaleString("pt-BR") + ` (${info.populacao_ano_referencia})`
-      : "indisponível";
-    const linhaMunicipio = cobertura
-      ? cobertura.municipios.filter(m => m.municipio.toLowerCase() === municipioNome.toLowerCase())
-      : [];
-    const naCarteira = linhaMunicipio.reduce((s, m) => s + (m.ativos || 0), 0);
+  const [info, cobertura] = await Promise.all([
+    api(`/api/territorio/municipio-info?municipio=${encodeURIComponent(municipioNome)}&uf=${uf}`).catch(() => null),
+    api(`/api/territorio/cobertura`).catch(() => null),
+  ]);
 
-    el.innerHTML = renderCards([...cards,
-      { rotulo: "População (IBGE)", valor: populacao },
-      { rotulo: "Empresas na carteira aqui", valor: naCarteira }]);
-  } else {
-    el.innerHTML = renderCards(cards);
-  }
+  base[3].valor = info && info.disponivel ? info.municipio_ibge_id : "indisponível";
+  const populacao = info && info.disponivel
+    ? info.populacao.toLocaleString("pt-BR") + ` (${info.populacao_ano_referencia})`
+    : "indisponível";
+  const linhaMunicipio = cobertura
+    ? cobertura.municipios.filter(m => m.municipio.toLowerCase() === municipioNome.toLowerCase())
+    : [];
+  const naCarteira = linhaMunicipio.reduce((s, m) => s + (m.ativos || 0), 0);
+
+  el.innerHTML = renderCards([...base,
+    { rotulo: "População (IBGE)", valor: populacao },
+    { rotulo: "Empresas na carteira aqui", valor: naCarteira }]);
 }
 
 function renderCards(cards) {
@@ -189,8 +198,15 @@ function renderPracaTabela() {
     </tbody></table>`;
 }
 
+function skeletonTabela() {
+  return `<div class="cartao">` +
+    Array.from({ length: 5 }, () => `<div class="skeleton skeleton-row"></div>`).join("") +
+    `</div>`;
+}
+
 async function carregarProspectsIniciais() {
   const el = document.getElementById("praca-tabela");
+  el.innerHTML = skeletonTabela();
   try {
     const r = await api(`/api/territorio/prospects?cnpjs=${CNPJS_INICIAIS.join(",")}`);
     prospects = r.prospects;
@@ -207,21 +223,29 @@ document.getElementById("praca-municipio").addEventListener("change", (e) => {
 });
 document.getElementById("praca-filtro-cnae").addEventListener("input", renderPracaTabela);
 
+function statusAddCnpj(msg, tipo) {
+  const el = document.getElementById("add-cnpj-status");
+  el.textContent = msg;
+  el.style.color = tipo === "erro" ? "var(--danger)" : "#94a3b8";
+}
+
 document.getElementById("form-add-cnpj").addEventListener("submit", async (e) => {
   e.preventDefault();
   const input = document.getElementById("input-novo-cnpj");
   const cnpj = input.value.replace(/\D/g, "");
-  if (cnpj.length !== 14) { alert("CNPJ precisa ter 14 dígitos."); return; }
+  statusAddCnpj("");
+  if (cnpj.length !== 14) { statusAddCnpj("CNPJ precisa ter 14 dígitos.", "erro"); return; }
   const botao = e.target.querySelector("button");
   botao.disabled = true; botao.textContent = "Consultando…";
   try {
     const r = await api(`/api/territorio/prospects?cnpjs=${cnpj}`);
-    if (!r.prospects.length) { alert("CNPJ não encontrado ou fonte indisponível."); return; }
+    if (!r.prospects.length) { statusAddCnpj("CNPJ não encontrado ou fonte indisponível.", "erro"); return; }
     prospects = prospects.filter(p => p.cnpj !== cnpj).concat(r.prospects);
     renderPracaTabela();
     input.value = "";
+    statusAddCnpj("Empresa adicionada.", "ok");
   } catch (err) {
-    alert(`Falha ao consultar: ${err.message}`);
+    statusAddCnpj(`Falha ao consultar: ${err.message}`, "erro");
   } finally {
     botao.disabled = false; botao.textContent = "Consultar";
   }
