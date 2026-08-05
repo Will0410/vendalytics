@@ -84,9 +84,20 @@ NEWSAPI_BASE_URL = os.getenv("NEWSAPI_BASE_URL", "https://newsapi.org/v2").strip
 
 HTTP_TIMEOUT_S = float(os.getenv("VENDALYTICS_HTTP_TIMEOUT_S", "15"))
 
-# Banco operacional (usuários + trilha de auditoria). Configurável por env
-# para que teste e ambiente de CI não escrevam no banco real da instalação.
+# Banco operacional (usuários, auditoria, scores, sinais, menções, CRM...).
+# Padrão: SQLite local (USERS_DB_PATH), configurável por env para que teste
+# e CI não escrevam no banco real da instalação.
+#
+# Se DATABASE_URL estiver setada (ex.: Postgres do Render), o banco
+# operacional passa a ser esse Postgres — ver infra/db.py. Motivo de trocar:
+# o disco do Render free tier é EFÊMERO (a base já foi zerada em deploy
+# antes, ver commit "Fix empty dashboard... Render's ephemeral disk") — um
+# SQLite de usuários/auditoria/score se perde a cada deploy exatamente pelo
+# mesmo motivo que os dados de demonstração se perdiam. Postgres gerenciado
+# resolve isso; SQLite continua sendo o padrão para quem roda local/CI, sem
+# exigir um Postgres só para rodar teste.
 USERS_DB_PATH = Path(os.getenv("VENDALYTICS_USERS_DB", str(PROJECT_ROOT / "usuarios.sqlite")))
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 
 # Staging do write-back de CRM (integracoes/csv_connector.py). Mesma razão do
 # USERS_DB_PATH: sem isto, rodar a suíte de teste grava arquivo real dentro

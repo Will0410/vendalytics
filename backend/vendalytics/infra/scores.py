@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from . import context, db
 
@@ -57,11 +57,14 @@ def registrar(*, sujeito_tipo: str, sujeito_id: str, tipo: str, valor: float,
             """INSERT INTO scores (tenant_id, sujeito_tipo, sujeito_id, tipo, valor,
                                    probabilidade, ic_inferior, ic_superior,
                                    modelo_versao, calculado_em, valido_ate)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+               VALUES (?,?,?,?,?,?,?,?,?,?,?) RETURNING id""",
             (escopo.tenant_id, sujeito_tipo, sujeito_id, tipo, float(valor),
              float(probabilidade), ic[0] if ic else None, ic[1] if ic else None,
              modelo_versao, _agora(), valido_ate))
-        score_id = int(cur.lastrowid)
+        # `RETURNING id` + fetchone(), não `.lastrowid` — o segundo não
+        # existe em Postgres (spec §3.5: banco operacional passa a suportar
+        # Postgres via DATABASE_URL); RETURNING funciona idêntico nos dois.
+        score_id = int(cur.fetchone()["id"])
         con.executemany(
             """INSERT INTO score_fatores (score_id, posicao, feature, rotulo,
                                           contribuicao, valor_feature)
@@ -82,11 +85,11 @@ def emitir_sinal(*, tipo: str, sujeito_tipo: str, sujeito_id: str, origem: str,
         cur = con.execute(
             """INSERT INTO sinais (tenant_id, tipo, sujeito_tipo, sujeito_id,
                                    ocorrido_em, ingerido_em, origem, confianca, payload)
-               VALUES (?,?,?,?,?,?,?,?,?)""",
+               VALUES (?,?,?,?,?,?,?,?,?) RETURNING id""",
             (escopo.tenant_id, tipo, sujeito_tipo, sujeito_id,
              ocorrido_em or _agora(), _agora(), origem, float(confianca),
              json.dumps(payload or {}, ensure_ascii=False, default=str)))
-        return int(cur.lastrowid)
+        return int(cur.fetchone()["id"])
 
 
 def registrar_desfecho(*, sujeito_tipo: str, sujeito_id: str, desfecho: str,
@@ -103,10 +106,10 @@ def registrar_desfecho(*, sujeito_tipo: str, sujeito_id: str, desfecho: str,
         cur = con.execute(
             """INSERT INTO desfechos (tenant_id, sujeito_tipo, sujeito_id, score_id,
                                       usuario, desfecho, motivo, valor, registrado_em)
-               VALUES (?,?,?,?,?,?,?,?,?)""",
+               VALUES (?,?,?,?,?,?,?,?,?) RETURNING id""",
             (escopo.tenant_id, sujeito_tipo, sujeito_id, score_id, escopo.usuario,
              desfecho, motivo, valor, _agora()))
-        desfecho_id = int(cur.lastrowid)
+        desfecho_id = int(cur.fetchone()["id"])
     emitir_sinal(tipo="recomendacao.desfecho", sujeito_tipo=sujeito_tipo,
                  sujeito_id=sujeito_id, origem=f"usuario:{escopo.usuario}",
                  payload={"desfecho": desfecho, "motivo": motivo, "valor": valor,
@@ -140,13 +143,18 @@ def sinais_recentes(sujeito_tipo: str, sujeito_id: str, tipo: str, *, dias: int 
     (reputação, campo) sem importar esses módulos: o acoplamento é só o
     barramento, que é exatamente o ponto do diferencial D-1."""
     escopo = context.atual()
+    # Corte calculado em Python, não `datetime('now', ?)` do SQL — essa
+    # função é sintaxe exclusiva do SQLite; comparar strings ISO-8601 dá o
+    # mesmo resultado em qualquer banco (SQLite ou Postgres), então o corte
+    # em Python funciona igual nos dois sem tradução nenhuma em runtime.
+    corte = (datetime.now(timezone.utc) - timedelta(days=int(dias))).isoformat()
     with db.conexao() as con:
         rows = con.execute(
             """SELECT * FROM sinais
                WHERE tenant_id=? AND sujeito_tipo=? AND sujeito_id=? AND tipo=?
-               AND ocorrido_em >= datetime('now', ?)
+               AND ocorrido_em >= ?
                ORDER BY ocorrido_em DESC""",
-            (escopo.tenant_id, sujeito_tipo, sujeito_id, tipo, f"-{int(dias)} day")).fetchall()
+            (escopo.tenant_id, sujeito_tipo, sujeito_id, tipo, corte)).fetchall()
     saida = []
     for r in rows:
         d = dict(r)
@@ -183,8 +191,9 @@ def sinais_nao_processados(*, limit: int = 500) -> list[dict]:
 def marcar_processado(sinal_id: int) -> None:
     with db.conexao() as con:
         con.execute(
-            "INSERT OR IGNORE INTO sinais_processados (sinal_id, processado_em) VALUES (?, datetime('now'))",
-            (sinal_id,))
+            """INSERT INTO sinais_processados (sinal_id, processado_em) VALUES (?, ?)
+               ON CONFLICT (sinal_id) DO NOTHING""",
+            (sinal_id, datetime.now(timezone.utc).isoformat()))
 
 
 def historico(sujeito_tipo: str, sujeito_id: str, tipo: str, limit: int = 30) -> list[dict]:
@@ -217,15 +226,16 @@ def cobertura_loop_fechado(*, tipo: str = "propensao_recompra", dias: int = 30) 
     """A métrica mais importante da §7.4: quantas recomendações emitidas
     tiveram desfecho registrado. Se ela cai, o produto parou de aprender."""
     escopo = context.atual()
+    corte = (datetime.now(timezone.utc) - timedelta(days=int(dias))).isoformat()
     with db.conexao() as con:
         emitidos = con.execute(
-            """SELECT COUNT(DISTINCT sujeito_id) FROM scores
-               WHERE tenant_id=? AND tipo=? AND calculado_em >= datetime('now', ?)""",
-            (escopo.tenant_id, tipo, f"-{int(dias)} day")).fetchone()[0]
+            """SELECT COUNT(DISTINCT sujeito_id) AS n FROM scores
+               WHERE tenant_id=? AND tipo=? AND calculado_em >= ?""",
+            (escopo.tenant_id, tipo, corte)).fetchone()["n"]
         com_desfecho = con.execute(
-            """SELECT COUNT(DISTINCT d.sujeito_id) FROM desfechos d
-               WHERE d.tenant_id=? AND d.registrado_em >= datetime('now', ?)""",
-            (escopo.tenant_id, f"-{int(dias)} day")).fetchone()[0]
+            """SELECT COUNT(DISTINCT d.sujeito_id) AS n FROM desfechos d
+               WHERE d.tenant_id=? AND d.registrado_em >= ?""",
+            (escopo.tenant_id, corte)).fetchone()["n"]
     return {
         "janela_dias": dias,
         "sujeitos_pontuados": emitidos,

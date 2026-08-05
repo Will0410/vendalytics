@@ -15,6 +15,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .. import config
@@ -97,12 +98,13 @@ def importar(conector: CRMConnector, *, desde: str = "") -> dict:
             continue
         validas.append(o)
 
+    agora = datetime.now(timezone.utc).isoformat()
     with db.conexao() as con:
         con.executemany(
             """INSERT INTO oportunidades_crm
                (tenant_id, provedor, cnpj, razao_social, estagio, valor,
                 criada_em, fechada_em, ganhou, motivo_perda, importado_em)
-               VALUES (?,?,?,?,?,?,?,?,?,?,datetime('now'))
+               VALUES (?,?,?,?,?,?,?,?,?,?,?)
                ON CONFLICT(tenant_id, cnpj) DO UPDATE SET
                  provedor=excluded.provedor, razao_social=excluded.razao_social,
                  estagio=excluded.estagio, valor=excluded.valor,
@@ -110,7 +112,7 @@ def importar(conector: CRMConnector, *, desde: str = "") -> dict:
                  motivo_perda=excluded.motivo_perda, importado_em=excluded.importado_em""",
             [(escopo.tenant_id, conector.nome(), o.cnpj, o.razao_social, o.estagio,
               o.valor, o.criada_em, o.fechada_em,
-              None if o.ganhou is None else int(o.ganhou), o.motivo_perda)
+              None if o.ganhou is None else int(o.ganhou), o.motivo_perda, agora)
              for o in validas])
 
     audit.registrar("crm.importar", recurso=conector.nome(),
@@ -141,8 +143,8 @@ def exportar_recomendacoes(conector: CRMConnector, itens: list[dict]) -> dict:
         con.execute(
             """INSERT INTO envios_crm (tenant_id, provedor, itens_enviados,
                                        itens_falhos, destino, enviado_em)
-               VALUES (?,?,?,?,?,datetime('now'))""",
+               VALUES (?,?,?,?,?,?)""",
             (escopo.tenant_id, conector.nome(), r["itens_enviados"], r["itens_falhos"],
-             r.get("destino", "")))
+             r.get("destino", ""), datetime.now(timezone.utc).isoformat()))
     audit.registrar("crm.exportar", recurso=conector.nome(), detalhe=r)
     return r

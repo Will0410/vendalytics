@@ -51,10 +51,10 @@ def adicionar(conta_id: str, *, nome: str, papel: str, senioridade: str = "",
             """INSERT INTO contatos (tenant_id, conta_id, nome, papel, senioridade,
                                      canal_preferencial, email, telefone,
                                      criado_em, criado_por)
-               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+               VALUES (?,?,?,?,?,?,?,?,?,?) RETURNING id""",
             (escopo.tenant_id, conta_id, nome.strip(), papel, senioridade,
              canal_preferencial, email.strip(), telefone.strip(), _agora(), escopo.usuario))
-        contato_id = int(cur.lastrowid)
+        contato_id = int(cur.fetchone()["id"])
     audit.registrar("comite.contato_adicionado", recurso=f"conta:{conta_id}",
                     detalhe={"papel": papel})
     return {"id": contato_id, "conta_id": conta_id, "nome": nome, "papel": papel}

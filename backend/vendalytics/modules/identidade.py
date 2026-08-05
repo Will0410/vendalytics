@@ -221,9 +221,10 @@ def resolver(*, filial: str = "") -> dict:
 
     with db.conexao() as con:
         con.executemany(
-            """INSERT OR REPLACE INTO contas_canonicas
-               (tenant_id, cliente_id, account_id, metodo, resolvido_em)
-               VALUES (?,?,?,?,?)""",
+            """INSERT INTO contas_canonicas (tenant_id, cliente_id, account_id, metodo, resolvido_em)
+               VALUES (?,?,?,?,?)
+               ON CONFLICT (tenant_id, cliente_id) DO UPDATE SET
+                 account_id=excluded.account_id, metodo=excluded.metodo, resolvido_em=excluded.resolvido_em""",
             [(escopo.tenant_id, cid, acc,
               "cnpj_raiz" if acc.startswith("BR") else "id_local", _agora())
              for cid, acc in por_cliente.items()])
@@ -309,9 +310,10 @@ def decidir(cliente_a: str, cliente_b: str, decisao: str) -> dict:
     a, b = sorted([str(cliente_a), str(cliente_b)])
     with db.conexao() as con:
         con.execute(
-            """INSERT OR REPLACE INTO decisoes_match
-               (tenant_id, cliente_a, cliente_b, decisao, usuario, decidido_em)
-               VALUES (?,?,?,?,?,?)""",
+            """INSERT INTO decisoes_match (tenant_id, cliente_a, cliente_b, decisao, usuario, decidido_em)
+               VALUES (?,?,?,?,?,?)
+               ON CONFLICT (tenant_id, cliente_a, cliente_b) DO UPDATE SET
+                 decisao=excluded.decisao, usuario=excluded.usuario, decidido_em=excluded.decidido_em""",
             (escopo.tenant_id, a, b, decisao, escopo.usuario, _agora()))
     audit.registrar("identidade.decisao", recurso=f"{a}|{b}",
                     detalhe={"decisao": decisao})
@@ -325,14 +327,14 @@ def qualidade() -> dict:
     escopo = context.atual()
     with db.conexao() as con:
         total = con.execute(
-            "SELECT COUNT(*) FROM contas_canonicas WHERE tenant_id=?",
-            (escopo.tenant_id,)).fetchone()[0]
+            "SELECT COUNT(*) AS n FROM contas_canonicas WHERE tenant_id=?",
+            (escopo.tenant_id,)).fetchone()["n"]
         contas = con.execute(
-            "SELECT COUNT(DISTINCT account_id) FROM contas_canonicas WHERE tenant_id=?",
-            (escopo.tenant_id,)).fetchone()[0]
+            "SELECT COUNT(DISTINCT account_id) AS n FROM contas_canonicas WHERE tenant_id=?",
+            (escopo.tenant_id,)).fetchone()["n"]
         locais = con.execute(
-            "SELECT COUNT(*) FROM contas_canonicas WHERE tenant_id=? AND metodo='id_local'",
-            (escopo.tenant_id,)).fetchone()[0]
+            "SELECT COUNT(*) AS n FROM contas_canonicas WHERE tenant_id=? AND metodo='id_local'",
+            (escopo.tenant_id,)).fetchone()["n"]
         decisoes = con.execute(
             "SELECT decisao, COUNT(*) c FROM decisoes_match WHERE tenant_id=? GROUP BY decisao",
             (escopo.tenant_id,)).fetchall()

@@ -8,3 +8,4 @@ PyYAML>=6.0
 Faker>=24.0
 python-dotenv>=1.0
 httpx>=0.27  # cliente da fonte externa opcional de universo de mercado (Território)
+psycopg[binary]>=3.1  # banco operacional em Postgres (opcional — ver infra/db.py); ausente DATABASE_URL = SQLite

@@ -78,9 +78,9 @@ def _salvar_snapshot(dados: dict, gerado_em: str) -> int:
     escopo = context.atual()
     with db.conexao() as con:
         cur = con.execute(
-            "INSERT INTO relatorios_executivos (tenant_id, gerado_em, dados) VALUES (?,?,?)",
+            "INSERT INTO relatorios_executivos (tenant_id, gerado_em, dados) VALUES (?,?,?) RETURNING id",
             (escopo.tenant_id, gerado_em, json.dumps(dados, ensure_ascii=False, default=str)))
-        return int(cur.lastrowid)
+        return int(cur.fetchone()["id"])
 
 
 def _o_que_mudou(atual: dict, anterior: dict | None) -> dict:

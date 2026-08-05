@@ -215,6 +215,56 @@ exigem uma decisão de provedor e credencial validada que não é minha para
 tomar sozinho; construir isso sem poder testar contra a API real seria
 pior que não construir.
 
+## Banco operacional em Postgres (Render ou qualquer outro)
+
+Por padrão o banco operacional (usuários, auditoria, scores, sinais,
+menções, CRM, comitê — tudo em `backend/vendalytics/infra/db.py`) é
+SQLite local. Isso quebra em qualquer PaaS com disco efêmero (Render free
+tier já resetou a base uma vez — ver commit "Fix empty dashboard...
+Render's ephemeral disk"): o mesmo problema que afeta `usuarios.sqlite`
+afeta o SQLite de demonstração.
+
+**Setar `DATABASE_URL`** (Postgres) faz o banco operacional inteiro migrar
+para lá, sem tocar em nenhum módulo consumidor — 8 arquivos (`audit.py`,
+`scores.py`, `comite.py`, `identidade.py`, `reputacao.py`, `relatorio.py`,
+`comunicacao_kpi.py`, `csv_connector.py`, `auth.py`) continuam chamando
+`db.conexao()` exatamente como chamavam antes.
+
+### Como configurar (Render)
+
+1. No painel do banco Postgres do Render, copie a **Internal Database
+   URL** (já vem com usuário/senha embutidos — não precisa montar a string
+   à mão).
+2. No serviço web do Vendalytics no Render → **Environment** → adicione
+   `DATABASE_URL` com esse valor.
+3. Deploy. O log de startup mostra `Schema operacional (Postgres) já na
+   versão N` (ou aplica as migrations pendentes) — confirma que pegou.
+
+**Nunca cole a connection string com senha em chat, PR ou log.** Configure
+direto no painel do Render; se precisar validar localmente, use uma senha
+de teste descartável, nunca a de produção.
+
+### O que foi validado, e como
+
+Todo o port foi testado contra um **Postgres real** (container Docker
+nesta sessão, schema recriado do zero) — não só revisado: `db.migrar()`
+aplicando as 10 migrations, `auth` (criar usuário + login), `scores`
+(`RETURNING id` em vez de `.lastrowid`, que não existe em Postgres),
+`sinais`/`marcar_processado` (idempotência via `ON CONFLICT DO NOTHING`),
+`auditoria` (trigger PL/pgSQL bloqueando UPDATE de verdade — não só a
+versão SQLite), `comite`, `identidade` (upsert `ON CONFLICT DO UPDATE`),
+`reputacao` (dedup `MIN(id) GROUP BY cluster_id`), e a aplicação FastAPI
+inteira subindo e respondendo `/api/health` e `/api/fila/diaria` via HTTP
+real apontada para esse Postgres.
+
+**Not testado**: a suíte `pytest` automatizada roda só contra SQLite — o
+isolamento entre testes (`base_isolada`/`db_operacional_isolado`) troca de
+arquivo SQLite por teste, e não existe hoje um equivalente para Postgres
+(criar/derrubar um schema por teste). Rodar a suíte inteira contra Postgres
+exigiria essa peça a mais — não construída ainda, para não inflar ainda
+mais o escopo desta sessão. A validação acima (módulo a módulo, contra
+banco real) é o substituto manual disso por enquanto.
+
 ## Onboarding de um cliente real
 
 1. Copie `config/tenant_config.example.yaml` para `config/tenant_config.yaml` e preencha com os dados do cliente.
