@@ -32,11 +32,37 @@ random.seed(42)
 # só usados como âncora de coordenada para o mapa parecer plausível; os
 # clientes em si são inteiramente fictícios.
 MUNICIPIOS = [
+    # Espalhado pelas 5 regiões — antes só tinha 5 cidades do PR, o que
+    # fazia o mapa de demonstração parecer vazio fora do Sul (coordenadas
+    # reais de capitais/cidades grandes, dado sintético por cima delas).
     ("Cascavel", "PR", -24.9555, -53.4552),
     ("Foz do Iguaçu", "PR", -25.5478, -54.5882),
     ("Toledo", "PR", -24.7136, -53.7431),
     ("Medianeira", "PR", -25.2958, -54.0939),
     ("Curitiba", "PR", -25.4284, -49.2733),
+    ("São Paulo", "SP", -23.5505, -46.6333),
+    ("Campinas", "SP", -22.9099, -47.0626),
+    ("Rio de Janeiro", "RJ", -22.9068, -43.1729),
+    ("Belo Horizonte", "MG", -19.9167, -43.9345),
+    ("Vitória", "ES", -20.3155, -40.3128),
+    ("Porto Alegre", "RS", -30.0346, -51.2177),
+    ("Florianópolis", "SC", -27.5954, -48.5480),
+    ("Brasília", "DF", -15.7939, -47.8828),
+    ("Goiânia", "GO", -16.6864, -49.2643),
+    ("Campo Grande", "MS", -20.4697, -54.6201),
+    ("Cuiabá", "MT", -15.6014, -56.0979),
+    ("Salvador", "BA", -12.9777, -38.5016),
+    ("Recife", "PE", -8.0476, -34.8770),
+    ("Fortaleza", "CE", -3.7172, -38.5433),
+    ("São Luís", "MA", -2.5307, -44.3068),
+    ("Natal", "RN", -5.7945, -35.2110),
+    ("João Pessoa", "PB", -7.1195, -34.8450),
+    ("Maceió", "AL", -9.6498, -35.7089),
+    ("Aracaju", "SE", -10.9472, -37.0731),
+    ("Teresina", "PI", -5.0892, -42.8019),
+    ("Manaus", "AM", -3.1190, -60.0217),
+    ("Belém", "PA", -1.4558, -48.5039),
+    ("Palmas", "TO", -10.2491, -48.3243),
 ]
 
 FILIAIS = [

@@ -5,20 +5,12 @@ document.getElementById("btn-sair").addEventListener("click", (e) => {
   e.preventDefault(); sair();
 });
 
-function kpiRingHTML(valor, rotulo, pct) {
-  const circ = 2 * Math.PI * 18;
-  const offset = circ - (pct / 100) * circ;
-  return `<div class="kpi">
-    <div class="kpi-ring">
-      <svg viewBox="0 0 48 48">
-        <circle class="ring-bg" cx="24" cy="24" r="18"/>
-        <circle class="ring-fg" cx="24" cy="24" r="18"
-          stroke-dasharray="${circ}" stroke-dashoffset="${offset}"/>
-      </svg>
-    </div>
-    <b>${valor}</b>
-    <span>${rotulo}</span>
-  </div>`;
+function kpiHTML(valor, rotulo) {
+  // Sem anel decorativo: era um percentual sem base em dado nenhum (75%,
+  // 60% fixos no código) — parecia um indicador de carregamento travado
+  // no tema claro, e não representava nada real. Número + rótulo, como no
+  // resto da referência de dashboard denso/corporativo.
+  return `<div class="kpi"><b>${valor}</b><span>${rotulo}</span></div>`;
 }
 
 function animateCounters() {
@@ -44,18 +36,11 @@ function animateCounters() {
 async function carregarKpis() {
   const d = await api("/api/metrics/dashboard");
   const el = document.getElementById("kpis");
-  const total = d.total_clientes || 1;
-  const pcts = {
-    "Clientes": 75,
-    "Ativos": Math.round((d.clientes_ativos / total) * 100),
-    "Faturamento 30d": 60,
-    "Vendedores": Math.round((d.total_vendedores / 20) * 100),
-  };
   el.innerHTML =
-    kpiRingHTML(d.total_clientes.toLocaleString("pt-BR"), "Clientes", pcts["Clientes"]) +
-    kpiRingHTML(d.clientes_ativos.toLocaleString("pt-BR"), "Ativos", pcts["Ativos"]) +
-    kpiRingHTML("R$ " + d.faturamento_30d.toLocaleString("pt-BR", { maximumFractionDigits: 0 }), "Faturamento 30d", pcts["Faturamento 30d"]) +
-    kpiRingHTML(String(d.total_vendedores), "Vendedores", pcts["Vendedores"]);
+    kpiHTML(d.total_clientes.toLocaleString("pt-BR"), "Clientes") +
+    kpiHTML(d.clientes_ativos.toLocaleString("pt-BR"), "Ativos") +
+    kpiHTML("R$ " + d.faturamento_30d.toLocaleString("pt-BR", { maximumFractionDigits: 0 }), "Faturamento 30d") +
+    kpiHTML(String(d.total_vendedores), "Vendedores");
   animateCounters();
 }
 
@@ -139,9 +124,17 @@ async function carregarMapa() {
       weight: 1,
     });
 
-    const sparkHTML = (c.atividade || []).map(v => {
-      const h = Math.abs(v) * 3;
-      const color = v >= 0 ? "#22d3ee" : "#f87171";
+    // Barras normalizadas pelo maior delta da própria série (sparkline de
+    // verdade, altura fixa) — antes usava o valor bruto em reais como
+    // altura em pixels, o que estourava a altura do popup sempre que um
+    // cliente tinha um mês com delta de faturamento na casa das centenas
+    // ou milhares.
+    const atividade = c.atividade || [];
+    const maxAbs = Math.max(1, ...atividade.map(v => Math.abs(v)));
+    const ALTURA_MAX_PX = 24;
+    const sparkHTML = atividade.map(v => {
+      const h = Math.max(2, Math.round((Math.abs(v) / maxAbs) * ALTURA_MAX_PX));
+      const color = v >= 0 ? "#0ea5e9" : "#f87171";
       return `<div style="display:inline-block;width:3px;height:${h}px;background:${color};border-radius:1px;margin:0 1px;vertical-align:bottom;"></div>`;
     }).join("");
 

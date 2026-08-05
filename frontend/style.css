@@ -1014,6 +1014,8 @@ body {
   font-family: var(--font-body) !important;
   font-size: 13px !important;
   line-height: 1.5 !important;
+  max-height: 220px !important;
+  overflow-y: auto !important;
 }
 
 .leaflet-popup-content b { color: var(--text-1); }
