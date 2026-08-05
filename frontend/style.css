@@ -1,33 +1,33 @@
 :root {
-  --cor-primaria: #2563eb;
-  --cor-secundaria: #f59e0b;
+  --cor-primaria: #3b6bd6;
+  --cor-secundaria: #b8863f;
   --tinta: #0f172a;
   --cinza: #64748b;
   --borda: #e2e8f0;
   --fundo: #f1f5f9;
-  --bg-deep: #0a0e1a;
-  --bg-surface: #111827;
-  --bg-card: rgba(255,255,255,0.04);
-  --primary-glow: rgba(37,99,235,0.35);
-  --primary-subtle: rgba(37,99,235,0.08);
-  --secondary-glow: rgba(245,158,11,0.35);
-  --secondary-subtle: rgba(245,158,11,0.08);
-  --success: #10b981;
-  --success-glow: rgba(16,185,129,0.35);
-  --warning: #f59e0b;
-  --danger: #ef4444;
-  --danger-glow: rgba(239,68,68,0.35);
-  --info: #3b82f6;
-  --info-glow: rgba(59,130,246,0.35);
-  --primary-gradient: linear-gradient(135deg, #2563eb, #7c3aed);
-  --secondary-gradient: linear-gradient(135deg, #f59e0b, #ef4444);
-  --success-gradient: linear-gradient(135deg, #10b981, #06b6d4);
-  --glass-bg: rgba(255,255,255,0.06);
-  --glass-border: rgba(255,255,255,0.08);
-  --glass-blur: 16px;
-  --radius: 16px;
-  --radius-sm: 10px;
-  --radius-xs: 8px;
+  --bg-deep: #0d1117;
+  --bg-surface: #151b26;
+  --bg-card: rgba(255,255,255,0.03);
+  --primary-glow: rgba(59,107,214,0.16);
+  --primary-subtle: rgba(59,107,214,0.07);
+  --secondary-glow: rgba(184,134,63,0.16);
+  --secondary-subtle: rgba(184,134,63,0.07);
+  --success: #2f9e6e;
+  --success-glow: rgba(47,158,110,0.16);
+  --warning: #b8863f;
+  --danger: #d9564a;
+  --danger-glow: rgba(217,86,74,0.16);
+  --info: #3b6bd6;
+  --info-glow: rgba(59,107,214,0.16);
+  --primary-gradient: linear-gradient(135deg, #3b6bd6, #2f5bc4);
+  --secondary-gradient: linear-gradient(135deg, #b8863f, #a8712f);
+  --success-gradient: linear-gradient(135deg, #2f9e6e, #278a63);
+  --glass-bg: rgba(255,255,255,0.035);
+  --glass-border: rgba(255,255,255,0.07);
+  --glass-blur: 10px;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-xs: 6px;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -72,16 +72,8 @@ body {
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(ellipse 80% 60% at 20% 10%, rgba(37,99,235,0.08) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 50% at 80% 80%, rgba(124,58,237,0.06) 0%, transparent 60%),
-    radial-gradient(ellipse 50% 40% at 50% 50%, rgba(245,158,11,0.04) 0%, transparent 60%);
-  animation: bgShift 20s ease-in-out infinite alternate;
-}
-
-@keyframes bgShift {
-  0% { opacity: 1; }
-  50% { opacity: 0.7; }
-  100% { opacity: 1; }
+    radial-gradient(ellipse 70% 50% at 20% 0%, rgba(59,107,214,0.045) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 40% at 85% 90%, rgba(59,107,214,0.03) 0%, transparent 60%);
 }
 
 /* ── Floating Glass Bar ─────────────────────────────────────── */
@@ -192,9 +184,9 @@ body {
 }
 
 .kpi:hover {
-  transform: translateY(-2px) scale(1.02);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.3), 0 0 0 1px var(--glass-border);
-  border-color: rgba(255,255,255,0.12);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+  border-color: rgba(255,255,255,0.1);
 }
 
 .kpi:hover::before { opacity: 1; height: 4px; }
@@ -853,22 +845,6 @@ body {
 }
 
 .card-login button:active { transform: scale(0.98); }
-
-.card-login button::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
-  animation: shimmerBtn 2s infinite;
-}
-
-@keyframes shimmerBtn {
-  0% { left: -100%; }
-  50%, 100% { left: 100%; }
-}
 
 .erro {
   color: var(--danger);
