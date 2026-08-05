@@ -48,12 +48,38 @@
     </div>
     <div id="duplicatas-lista"><p class="vazio">Carregando…</p></div>
 
-    <h2 class="secao-titulo">Agente de rascunho (A7)</h2>
+    <h2 class="secao-titulo">Agente de rascunho (A7 — passo "executar")</h2>
     <div class="form-inline">
       <input type="text" id="cliente-rascunho" placeholder="id do cliente (ex.: CNPJ)"/>
       <button id="btn-rascunho">Gerar rascunho</button>
     </div>
     <div id="rascunho-resultado"></div>
+
+    <h2 class="secao-titulo">Ciclo A7 completo</h2>
+    <p class="aviso-inline">planejar → priorizar → executar (redigir) → medir → re-aprender, numa
+       chamada só. Nunca envia nada — enviar é sempre uma ação humana separada.</p>
+    <div class="form-inline">
+      <button id="btn-ciclo">Executar ciclo agora</button>
+    </div>
+    <div id="ciclo-resultado"></div>
+
+    <h2 class="secao-titulo">Construtor no-code (D-3)</h2>
+    <div class="form-inline">
+      <select id="semantico-metrica"></select>
+      <select id="semantico-dimensao"><option value="">(sem dimensão)</option></select>
+      <button id="btn-semantico-consultar">Consultar</button>
+    </div>
+    <div class="form-inline">
+      <input type="text" id="semantico-pergunta" placeholder="ou pergunte em português: 'faturamento por filial'" style="min-width:320px"/>
+      <button id="btn-semantico-perguntar">Perguntar</button>
+    </div>
+    <div id="semantico-resultado"></div>
+
+    <h2 class="secao-titulo">Relatório executivo (C4)</h2>
+    <div class="form-inline">
+      <button id="btn-relatorio">Gerar relatório</button>
+    </div>
+    <div id="relatorio-resultado"></div>
   </section>
 </main>
 

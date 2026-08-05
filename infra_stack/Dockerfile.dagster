@@ -1,0 +1,11 @@
+# Dockerfile.dagster — webserver real com um asset de exemplo
+# (dagster_defs.py), o suficiente para provar que o orquestrador sobe e
+# serve a UI (spec §3.1). Pipelines de ingestão de verdade (bronze/silver/
+# gold) entram como novos assets no mesmo módulo — não muda a imagem.
+FROM python:3.11-slim
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+RUN pip install --no-cache-dir dagster==1.8.1 dagster-webserver==1.8.1
+WORKDIR /app
+COPY dagster_defs.py .
+EXPOSE 3000
+CMD ["dagster-webserver", "-m", "dagster_defs", "-h", "0.0.0.0", "-p", "3000"]

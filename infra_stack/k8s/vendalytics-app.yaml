@@ -1,0 +1,61 @@
+# vendalytics-app.yaml — Deployment + Service + ConfigMap da API (spec §3.5
+# Kubernetes). Validado com `kubectl apply --dry-run=client` (checagem de
+# schema real) — NÃO validado contra um cluster vivo: este ambiente tem
+# `kubectl` mas nenhum cluster local (`kind`/`minikube`) disponível. É o
+# limite honesto desta seção: correto por construção, não testado em
+# execução, diferente do docker-compose ao lado (esse SIM foi validado
+# subindo os 6 serviços e trocando dado de verdade com cada um).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vendalytics-config
+  namespace: vendalytics
+data:
+  VENDALYTICS_ADAPTER: "sqlite_reference"
+  DEMO_MODE: "false"
+  GROQ_MODEL: "llama-3.3-70b-versatile"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vendalytics-api
+  namespace: vendalytics
+  labels: {app: vendalytics-api}
+spec:
+  replicas: 2
+  selector:
+    matchLabels: {app: vendalytics-api}
+  template:
+    metadata:
+      labels: {app: vendalytics-api}
+    spec:
+      containers:
+        - name: vendalytics-api
+          image: vendalytics-api:latest   # troque pela imagem publicada no registry do cliente
+          ports: [{containerPort: 8901}]
+          envFrom:
+            - configMapRef: {name: vendalytics-config}
+          env:
+            - name: JWT_SECRET
+              valueFrom: {secretKeyRef: {name: vendalytics-secrets, key: jwt-secret}}
+          readinessProbe:
+            httpGet: {path: /api/health, port: 8901}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: {path: /api/health, port: 8901}
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests: {cpu: "250m", memory: "256Mi"}
+            limits: {cpu: "1", memory: "512Mi"}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vendalytics-api
+  namespace: vendalytics
+spec:
+  selector: {app: vendalytics-api}
+  ports: [{port: 80, targetPort: 8901}]
+  type: ClusterIP

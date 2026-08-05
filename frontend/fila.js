@@ -147,6 +147,8 @@ function cartao(item) {
       <div class="numeros">
         <div class="ve"><b>${brl(item.valor_esperado)}</b><span>valor esperado</span></div>
         <div class="sc"><b>${item.score}</b><span>propensão</span></div>
+        ${item.contactabilidade != null ? `<div class="sc" title="Segundo score da spec A3 — sempre ao lado da propensão: lead de propensão alta e contactabilidade baixa é caro.">
+          <b>${item.contactabilidade}</b><span>contactabilidade (${item.contactabilidade_classe})</span></div>` : ""}
       </div>
     </header>
     ${radar}

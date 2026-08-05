@@ -102,5 +102,76 @@ document.getElementById("btn-rascunho").addEventListener("click", async () => {
   } catch (e) { el.innerHTML = `<p class="vazio">${e.message}</p>`; }
 });
 
+document.getElementById("btn-ciclo").addEventListener("click", async () => {
+  const el = document.getElementById("ciclo-resultado");
+  el.innerHTML = `<p class="vazio">Rodando o ciclo…</p>`;
+  try {
+    const r = await api("/api/orquestrador/executar-ciclo", {method: "POST"});
+    const e = r.etapas;
+    el.innerHTML = `<div class="cartao"><ul class="fatores">
+      <li class="fator"><span class="txt"><b>Planejar/priorizar:</b> ${e.planejar_priorizar.itens_priorizados} contas na fila
+        (confiável: ${e.planejar_priorizar.confiavel ?? "—"})</span></li>
+      <li class="fator"><span class="txt"><b>Executar:</b> ${e.executar.rascunhos_gerados} rascunhos gerados,
+        ${e.executar.rascunhos_indisponiveis} indisponíveis (agente configurado: ${e.executar.agente_configurado})</span></li>
+      <li class="fator"><span class="txt"><b>Medir:</b> cobertura de loop fechado ${e.medir.cobertura_pct ?? "—"}%</span></li>
+      <li class="fator"><span class="txt"><b>Re-aprender:</b> cache invalidado</span></li>
+    </ul><p class="aviso-inline">${r.aviso}</p></div>`;
+  } catch (err) { el.innerHTML = `<p class="vazio">${err.message}</p>`; }
+});
+
+async function carregarModeloSemantico() {
+  const r = await api("/api/semantico/modelo");
+  document.getElementById("semantico-metrica").innerHTML =
+    Object.entries(r.metricas).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
+  document.getElementById("semantico-dimensao").innerHTML =
+    `<option value="">(sem dimensão)</option>` +
+    Object.entries(r.dimensoes).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
+}
+
+function renderConsultaSemantica(r) {
+  const el = document.getElementById("semantico-resultado");
+  if (!r.disponivel) { el.innerHTML = `<p class="vazio">${r.motivo}</p>`; return; }
+  el.innerHTML = `<table class="tabela-simples"><thead><tr><th>${r.dimensao || "total"}</th><th>${r.metrica_rotulo}</th></tr></thead>
+    <tbody>${r.resultados.map(x => `<tr><td>${x.chave}</td><td>${x.valor.toLocaleString("pt-BR")}</td></tr>`).join("")}</tbody></table>
+    <p class="aviso-inline"><code>${r.consulta_equivalente}</code><br/>${r.aviso}</p>`;
+}
+
+document.getElementById("btn-semantico-consultar").addEventListener("click", async () => {
+  const metrica = document.getElementById("semantico-metrica").value;
+  const dimensao = document.getElementById("semantico-dimensao").value;
+  try {
+    renderConsultaSemantica(await api(`/api/semantico/consultar?metrica=${metrica}&dimensao=${dimensao}`));
+  } catch (e) { document.getElementById("semantico-resultado").innerHTML = `<p class="vazio">${e.message}</p>`; }
+});
+
+document.getElementById("btn-semantico-perguntar").addEventListener("click", async () => {
+  const pergunta = document.getElementById("semantico-pergunta").value.trim();
+  if (!pergunta) return;
+  try {
+    const r = await api(`/api/semantico/perguntar?pergunta=${encodeURIComponent(pergunta)}`);
+    renderConsultaSemantica(r);
+    if (r.interpretacao) {
+      document.getElementById("semantico-resultado").innerHTML += `<p class="aviso-inline">interpretado como: ${r.interpretacao.metrica}${r.interpretacao.dimensao ? " por " + r.interpretacao.dimensao : ""} (método: ${r.interpretacao.metodo})</p>`;
+    }
+  } catch (e) { document.getElementById("semantico-resultado").innerHTML = `<p class="vazio">${e.message}</p>`; }
+});
+
+document.getElementById("btn-relatorio").addEventListener("click", async () => {
+  const el = document.getElementById("relatorio-resultado");
+  el.innerHTML = `<p class="vazio">Gerando…</p>`;
+  try {
+    const r = await api("/api/reputacao/relatorio-executivo", {method: "POST"});
+    const mud = r.o_que_mudou_desde_o_ultimo;
+    el.innerHTML = `<div class="cartao">
+      <header><div class="ident"><b>Relatório ${r.gerado_em}</b><span>modo: ${r.modo}</span></div></header>
+      ${r.texto_executivo ? `<ul class="fatores"><li class="fator"><span class="txt">${r.texto_executivo}</span></li></ul>` : ""}
+      <p class="aviso-inline">${mud.disponivel
+        ? `Desde o último relatório: sentimento ${mud.delta_sentimento_ponderado >= 0 ? "+" : ""}${mud.delta_sentimento_ponderado}, volume ${mud.delta_volume_mencoes >= 0 ? "+" : ""}${mud.delta_volume_mencoes}, ${mud.novos_alertas} novos alertas.`
+        : mud.motivo}</p>
+    </div>`;
+  } catch (e) { el.innerHTML = `<p class="vazio">${e.message}</p>`; }
+});
+
 carregarIntegracoes().catch(e => console.error(e));
 carregarDuplicatas().catch(e => console.error(e));
+carregarModeloSemantico().catch(e => console.error(e));
