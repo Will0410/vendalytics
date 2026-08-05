@@ -96,6 +96,25 @@ def universo_por_prefixos(prefixos: list[str], uf: str = "") -> list[dict]:
              "uf": r["uf"], "empresas": r["empresas"]} for r in rows]
 
 
+def buscar_por_cnpj(cnpj: str) -> dict | None:
+    """Registro cacheado de 1 CNPJ, se já foi consultado antes. Usado como
+    fallback quando a BrasilAPI está indisponível/rate-limitada (429) no
+    momento — mostrar o último dado real conhecido é mais honesto que sumir
+    com a empresa da lista, desde que fique claro que pode estar
+    desatualizado (ver `fonte` no retorno de `rfb_real.consultar`)."""
+    with closing(_con()) as con:
+        r = con.execute(
+            "SELECT * FROM empresas_publicas WHERE cnpj = ?", (cnpj,)).fetchone()
+    if r is None:
+        return None
+    return {"cnpj": r["cnpj"], "razao_social": r["razao_social"],
+            "cnae_principal": r["cnae_principal"], "cnae_principal_descricao": "",
+            "municipio": r["municipio"], "uf": r["uf"], "ativa": bool(r["ativa"]),
+            "situacao": "ativa (cache)" if r["ativa"] else "inativa (cache)",
+            "nome_fantasia": "", "porte": "", "bairro": "", "telefone": "", "email": "",
+            "socios": [], "atualizado_em": r["atualizado_em"]}
+
+
 def total_ingerido() -> int:
     with closing(_con()) as con:
         return con.execute("SELECT COUNT(*) FROM empresas_publicas").fetchone()[0]

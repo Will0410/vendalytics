@@ -41,6 +41,13 @@ def test_populacao_estimada_de_curitiba_e_plausivel():
 
 
 @pytest.mark.network
+def test_municipios_por_uf_lista_curitiba():
+    r = ibge_real.municipios_por_uf("PR")
+    assert r is not None and len(r) > 300  # PR tem 399 municípios
+    assert any(m["nome"] == "Curitiba" for m in r)
+
+
+@pytest.mark.network
 def test_camada_para_ponto_ponta_a_ponta():
     r = ibge_real.camada_para_ponto("Curitiba", "PR")
     assert r["disponivel"] is True
@@ -63,6 +70,14 @@ def test_ibge_fora_do_ar_nao_levanta(monkeypatch):
     monkeypatch.setattr(httpx, "get", fake_get)
     assert ibge_real.municipio_id("Curitiba", "PR") is None
     assert ibge_real.populacao_estimada(4106902) is None
+    assert ibge_real.municipios_por_uf("PR") is None
+
+
+def test_municipios_por_uf_sem_uf_nao_chama_rede(monkeypatch):
+    chamou = {"sim": False}
+    monkeypatch.setattr(httpx, "get", lambda *a, **k: chamou.update(sim=True))
+    assert ibge_real.municipios_por_uf("") is None
+    assert chamou["sim"] is False
 
 
 def test_resposta_sem_serie_devolve_none(monkeypatch):

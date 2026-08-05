@@ -27,7 +27,7 @@ from .integracoes.hubspot_real import HubSpotConnector
 from .integracoes.newsapi_real import NewsAPIMentionSource
 from .integracoes.salesforce_real import SalesforceConnector
 from .integracoes.whapi_real import WhapiMessagingConnector
-from .sources import mercado_externo
+from .sources import ibge_real, mercado_externo, rfb_real
 from .modules import (agente, comite, comunicacao_kpi, contactabilidade,
                       executivo, field, fila, geo, identidade, mapa, mercado,
                       metrics, mix, orquestrador, recompra, relatorio,
@@ -292,6 +292,41 @@ def territorio_enriquecer_cnpj(cnpj: str, user: dict = Depends(auth.get_current_
     if empresa is None:
         raise HTTPException(404, "CNPJ inválido, não encontrado, ou fonte indisponível")
     return empresa
+
+
+@app.get("/api/territorio/municipios")
+def territorio_municipios(uf: str, user: dict = Depends(auth.get_current_user)):
+    """Municípios de uma UF (IBGE, real, sem chave) — alimenta o filtro
+    Estado→Município do Relatório de Praça. 502 se o IBGE estiver fora do
+    ar (não é erro de quem chamou)."""
+    municipios = ibge_real.municipios_por_uf(uf)
+    if municipios is None:
+        raise HTTPException(502, "IBGE indisponível no momento")
+    return {"uf": uf.upper(), "municipios": municipios}
+
+
+@app.get("/api/territorio/municipio-info")
+def territorio_municipio_info(municipio: str, uf: str, user: dict = Depends(auth.get_current_user)):
+    """População estimada (IBGE) de 1 município — o mesmo dado que já
+    alimenta a camada sociodemográfica do simulador de Geo
+    (`ibge_real.camada_para_ponto`), exposto aqui para os KPIs do Relatório
+    de Praça sem duplicar a integração."""
+    return ibge_real.camada_para_ponto(municipio, uf)
+
+
+@app.get("/api/territorio/prospects")
+def territorio_prospects(cnpjs: str, user: dict = Depends(auth.get_current_user)):
+    """Consulta em lote de CNPJs reais (BrasilAPI/RFB) para a tabela de
+    prospecção do Relatório de Praça — mesma fonte de
+    `/api/territorio/enriquecer-cnpj`, em lote. `cnpjs` é uma lista separada
+    por vírgula; cada CNPJ consultado também alimenta o cache de mercado
+    público (mesmo efeito colateral de enriquecer-cnpj)."""
+    lista = [c.strip() for c in cnpjs.split(",") if c.strip()]
+    if not lista:
+        raise HTTPException(400, "informe ao menos um CNPJ")
+    if len(lista) > 20:
+        raise HTTPException(400, "no máximo 20 CNPJs por consulta")
+    return {"prospects": rfb_real.consultar_lote(lista)}
 
 
 @app.get("/api/territorio/simular-carteiras")

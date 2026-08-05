@@ -87,3 +87,146 @@ async function carregar() {
 
 document.getElementById("btn-filtrar").addEventListener("click", carregar);
 carregarFiliais().then(carregar).catch(carregar);
+
+// ── Relatório de Praça (IBGE + BrasilAPI/RFB, dados reais) ─────────────────
+const UFS = ["AC","AL","AP","AM","BA","CE","DF","ES","GO","MA","MT","MS","MG",
+  "PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO"];
+
+const CNPJS_INICIAIS = ["00000000000191", "33000167000101", "60701190000104",
+  "47508411000156", "06057223000171", "00360305000104"];
+
+let prospects = [];
+let municipiosDaUf = [];
+
+function formatarCnpj(cnpj) {
+  return cnpj.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
+}
+
+function popularUFs() {
+  const sel = document.getElementById("praca-uf");
+  sel.innerHTML = `<option value="">UF</option>` + UFS.map(u => `<option value="${u}">${u}</option>`).join("");
+}
+
+async function carregarMunicipiosDaUf(uf) {
+  const selMun = document.getElementById("praca-municipio");
+  if (!uf) { selMun.innerHTML = `<option value="">Selecione a UF primeiro</option>`; return; }
+  selMun.innerHTML = `<option value="">Carregando…</option>`;
+  try {
+    const r = await api(`/api/territorio/municipios?uf=${uf}`);
+    municipiosDaUf = r.municipios;
+    selMun.innerHTML = `<option value="">${r.municipios.length} municípios — selecione</option>` +
+      r.municipios.map(m => `<option value="${m.nome}">${m.nome}</option>`).join("");
+    renderPracaKpis(uf, null);
+  } catch (e) {
+    selMun.innerHTML = `<option value="">Falha ao carregar municípios</option>`;
+  }
+}
+
+async function renderPracaKpis(uf, municipioNome) {
+  const el = document.getElementById("praca-kpis");
+  const cards = [
+    { rotulo: "Municípios na UF", valor: municipiosDaUf.length || "—" },
+  ];
+
+  if (municipioNome) {
+    cards.unshift({ rotulo: "Praça selecionada", valor: `${municipioNome}/${uf}` });
+    el.innerHTML = renderCards([...cards,
+      { rotulo: "População (IBGE)", valor: "…" },
+      { rotulo: "Empresas na carteira aqui", valor: "…" }]);
+
+    const [info, cobertura] = await Promise.all([
+      api(`/api/territorio/municipio-info?municipio=${encodeURIComponent(municipioNome)}&uf=${uf}`).catch(() => null),
+      api(`/api/territorio/cobertura`).catch(() => null),
+    ]);
+
+    const populacao = info && info.disponivel
+      ? info.populacao.toLocaleString("pt-BR") + ` (${info.populacao_ano_referencia})`
+      : "indisponível";
+    const linhaMunicipio = cobertura
+      ? cobertura.municipios.filter(m => m.municipio.toLowerCase() === municipioNome.toLowerCase())
+      : [];
+    const naCarteira = linhaMunicipio.reduce((s, m) => s + (m.ativos || 0), 0);
+
+    el.innerHTML = renderCards([...cards,
+      { rotulo: "População (IBGE)", valor: populacao },
+      { rotulo: "Empresas na carteira aqui", valor: naCarteira }]);
+  } else {
+    el.innerHTML = renderCards(cards);
+  }
+}
+
+function renderCards(cards) {
+  return cards.map(c => `<div class="praca-kpi"><b>${c.valor}</b><span>${c.rotulo}</span></div>`).join("");
+}
+
+function renderPracaTabela() {
+  const el = document.getElementById("praca-tabela");
+  const filtro = document.getElementById("praca-filtro-cnae").value.trim().toLowerCase();
+  const filtrados = filtro
+    ? prospects.filter(p => (p.cnae_principal_descricao || "").toLowerCase().includes(filtro)
+        || (p.cnae_principal || "").includes(filtro))
+    : prospects;
+
+  if (!filtrados.length) {
+    el.innerHTML = `<p class="vazio">${prospects.length ? "Nenhuma empresa bate com o filtro." : "Nenhuma empresa consultada ainda."}</p>`;
+    return;
+  }
+
+  el.innerHTML = `<table class="tabela-simples tabela-densa"><thead>
+      <tr>
+        <th>Razão social / fantasia</th><th>CNPJ</th><th>CNAE principal</th>
+        <th>Porte</th><th>Município/UF</th><th>Situação</th>
+      </tr>
+    </thead><tbody>
+      ${filtrados.map(p => `<tr>
+        <td><b>${p.razao_social}</b>${p.nome_fantasia ? `<br><span class="mi-sub">${p.nome_fantasia}</span>` : ""}</td>
+        <td>${formatarCnpj(p.cnpj)}</td>
+        <td>${p.cnae_principal_descricao || p.cnae_principal || "—"}</td>
+        <td>${p.porte || "—"}</td>
+        <td>${p.municipio}/${p.uf}</td>
+        <td><span class="badge ${p.ativa ? "badge-ok" : "badge-off"}">${p.situacao || "—"}</span></td>
+      </tr>`).join("")}
+    </tbody></table>`;
+}
+
+async function carregarProspectsIniciais() {
+  const el = document.getElementById("praca-tabela");
+  try {
+    const r = await api(`/api/territorio/prospects?cnpjs=${CNPJS_INICIAIS.join(",")}`);
+    prospects = r.prospects;
+    renderPracaTabela();
+  } catch (e) {
+    el.innerHTML = erroComRetry(`Falha ao consultar empresas: ${e.message}`, carregarProspectsIniciais);
+  }
+}
+
+document.getElementById("praca-uf").addEventListener("change", (e) => carregarMunicipiosDaUf(e.target.value));
+document.getElementById("praca-municipio").addEventListener("change", (e) => {
+  const uf = document.getElementById("praca-uf").value;
+  if (e.target.value) renderPracaKpis(uf, e.target.value);
+});
+document.getElementById("praca-filtro-cnae").addEventListener("input", renderPracaTabela);
+
+document.getElementById("form-add-cnpj").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const input = document.getElementById("input-novo-cnpj");
+  const cnpj = input.value.replace(/\D/g, "");
+  if (cnpj.length !== 14) { alert("CNPJ precisa ter 14 dígitos."); return; }
+  const botao = e.target.querySelector("button");
+  botao.disabled = true; botao.textContent = "Consultando…";
+  try {
+    const r = await api(`/api/territorio/prospects?cnpjs=${cnpj}`);
+    if (!r.prospects.length) { alert("CNPJ não encontrado ou fonte indisponível."); return; }
+    prospects = prospects.filter(p => p.cnpj !== cnpj).concat(r.prospects);
+    renderPracaTabela();
+    input.value = "";
+  } catch (err) {
+    alert(`Falha ao consultar: ${err.message}`);
+  } finally {
+    botao.disabled = false; botao.textContent = "Consultar";
+  }
+});
+
+popularUFs();
+renderPracaKpis("", null);
+carregarProspectsIniciais();

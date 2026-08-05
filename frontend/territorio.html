@@ -45,6 +45,29 @@
     </div>
 
     <div id="tabela-territorio"><p class="vazio">Carregando…</p></div>
+
+    <h2 class="secao-titulo">Relatório de Praça</h2>
+    <p class="aviso-inline">Estado e município via API pública do IBGE. Empresas via BrasilAPI/Receita
+       Federal (consulta ponto-a-ponto real — não existe "listar todas as empresas de um município"
+       numa API pública e gratuita; a lista abaixo cresce por CNPJ consultado, nunca é a base nacional
+       completa).</p>
+
+    <div class="form-inline">
+      <select id="praca-uf"></select>
+      <select id="praca-municipio"><option value="">Selecione a UF primeiro</option></select>
+      <input type="text" id="praca-filtro-cnae" placeholder="filtrar por CNAE/atividade na tabela abaixo"/>
+    </div>
+
+    <div class="praca-kpis" id="praca-kpis"></div>
+
+    <div class="praca-tabela-header">
+      <h3>Empresas consultadas (dados reais, Receita Federal)</h3>
+      <form id="form-add-cnpj" class="form-inline" style="padding:0">
+        <input type="text" id="input-novo-cnpj" placeholder="CNPJ (só números)" maxlength="18"/>
+        <button type="submit">Consultar</button>
+      </form>
+    </div>
+    <div id="praca-tabela"><p class="vazio">Carregando…</p></div>
   </section>
 </main>
 

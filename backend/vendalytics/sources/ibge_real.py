@@ -66,6 +66,23 @@ def municipio_id(nome: str, uf: str) -> int | None:
         return None
 
 
+def municipios_por_uf(uf: str) -> list[dict] | None:
+    """Lista de municípios de uma UF (localidades API v1) — o que alimenta o
+    filtro Estado→Município e os KPIs da praça no Território. `None` só
+    quando a API está fora do ar; UF inexistente/mal formada volta lista
+    vazia (a própria API do IBGE responde assim, não é caso de erro)."""
+    if not configurado() or not uf:
+        return None
+    try:
+        r = httpx.get(f"{BASE_LOCALIDADES}/estados/{uf.upper()}/municipios",
+                      timeout=config.HTTP_TIMEOUT_S)
+        r.raise_for_status()
+        return [{"id": int(m["id"]), "nome": m.get("nome", "")} for m in r.json()]
+    except httpx.HTTPError as e:
+        log.warning("IBGE indisponível (municípios por UF): %s", e)
+        return None
+
+
 def populacao_estimada(municipio_ibge_id: int) -> dict | None:
     """População residente estimada (ano mais recente disponível). `None`
     quando indisponível — o chamador decide como degradar, nunca um número

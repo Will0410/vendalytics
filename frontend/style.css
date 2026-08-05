@@ -962,6 +962,65 @@ body {
 .gap-mix ul { margin: var(--space-1) 0 0 var(--space-4); padding: 0; }
 .gap-mix.aviso-inline { padding: 0; margin-top: var(--space-3); }
 
+/* ── Relatório de Praça (Território) ───────────────────────────── */
+.praca-kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-3);
+  padding: 0 var(--space-6) var(--space-4);
+}
+
+.praca-kpi {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+}
+
+.praca-kpi b {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 17px;
+  font-weight: 700;
+  color: #f1f5f9;
+  line-height: 1.2;
+  margin-bottom: 2px;
+}
+
+.praca-kpi span {
+  font-size: 10.5px;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.praca-tabela-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: 0 var(--space-6) var(--space-3);
+}
+
+.praca-tabela-header h3 { font-size: 13px; font-weight: 700; color: #f1f5f9; }
+
+.tabela-densa th, .tabela-densa td { padding: 6px 10px; font-size: 12px; }
+.tabela-densa .mi-sub { color: #64748b; font-size: 11px; }
+
+.badge {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.badge-ok { color: var(--success); background: var(--success-glow); }
+.badge-off { color: var(--danger); background: var(--danger-glow); }
+
 /* ── Leaflet Overrides ──────────────────────────────────────── */
 .leaflet-popup-content-wrapper {
   background: rgba(10,14,26,0.92) !important;
