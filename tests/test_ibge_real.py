@@ -66,6 +66,14 @@ def test_pib_per_capita_de_curitiba_e_plausivel():
 
 
 @pytest.mark.network
+def test_empresas_atuantes_total_de_curitiba_e_plausivel():
+    r = ibge_real.empresas_atuantes_total(4106902)
+    assert r is not None
+    assert r["total"] > 50_000  # Curitiba é a maior cidade do PR
+    assert r["ano"] >= 2022
+
+
+@pytest.mark.network
 def test_camada_para_ponto_ponta_a_ponta():
     r = ibge_real.camada_para_ponto("Curitiba", "PR")
     assert r["disponivel"] is True
@@ -91,6 +99,17 @@ def test_ibge_fora_do_ar_nao_levanta(monkeypatch):
     assert ibge_real.municipios_por_uf("PR") is None
     assert ibge_real.pib_total(4106902) is None
     assert ibge_real.pib_per_capita(4106902) is None
+    assert ibge_real.empresas_atuantes_total(4106902) is None
+
+
+def test_empresas_atuantes_com_dado_suprimido_e_none(monkeypatch):
+    """A resposta real do IBGE para CNAE por município é '-' (sigilo
+    estatístico) — nunca pode virar um número, nem 0."""
+    def fake_get(url, **kwargs):
+        return httpx.Response(200, json=[{"resultados": [{"series": [
+            {"serie": {"2024": "-"}}]}]}], request=httpx.Request("GET", url))
+    monkeypatch.setattr(httpx, "get", fake_get)
+    assert ibge_real.empresas_atuantes_total(4106902) is None
 
 
 def test_pib_per_capita_sem_pib_ou_sem_populacao_e_none(monkeypatch):

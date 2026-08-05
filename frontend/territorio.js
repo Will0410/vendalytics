@@ -143,7 +143,7 @@ async function renderPracaKpis(uf, municipioNome) {
 
   if (!municipioNome) { el.innerHTML = renderCards(base); return; }
 
-  el.innerHTML = renderCards(base) + skeletonKpis(3);
+  el.innerHTML = renderCards(base) + skeletonKpis(4);
 
   const [info, cobertura] = await Promise.all([
     api(`/api/territorio/municipio-info?municipio=${encodeURIComponent(municipioNome)}&uf=${uf}`).catch(() => null),
@@ -157,6 +157,9 @@ async function renderPracaKpis(uf, municipioNome) {
   const pibPerCapita = info && info.disponivel && info.pib_per_capita_reais != null
     ? "R$ " + Math.round(info.pib_per_capita_reais).toLocaleString("pt-BR") + `/ano (${info.pib_ano_referencia})`
     : "indisponível";
+  const empresasAtuantes = info && info.disponivel && info.empresas_atuantes_total != null
+    ? info.empresas_atuantes_total.toLocaleString("pt-BR") + ` (${info.empresas_atuantes_ano_referencia}, todos os ramos)`
+    : "indisponível";
   const linhaMunicipio = cobertura
     ? cobertura.municipios.filter(m => m.municipio.toLowerCase() === municipioNome.toLowerCase())
     : [];
@@ -165,6 +168,7 @@ async function renderPracaKpis(uf, municipioNome) {
   el.innerHTML = renderCards([...base,
     { rotulo: "População (IBGE)", valor: populacao },
     { rotulo: "PIB per capita (IBGE)", valor: pibPerCapita },
+    { rotulo: "Empresas atuantes (IBGE)", valor: empresasAtuantes },
     { rotulo: "Empresas na carteira aqui", valor: naCarteira }]);
 }
 

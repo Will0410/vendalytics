@@ -307,17 +307,20 @@ def territorio_municipios(uf: str, user: dict = Depends(auth.get_current_user)):
 
 @app.get("/api/territorio/municipio-info")
 def territorio_municipio_info(municipio: str, uf: str, user: dict = Depends(auth.get_current_user)):
-    """População (mesma integração do simulador de Geo) + PIB per capita
-    (novo, Contas Regionais do IBGE) de 1 município — os KPIs do Relatório
-    de Praça. PIB não entra em `camada_para_ponto` (usado por Geo a cada
-    clique no mapa) para não somar uma chamada HTTP extra a um caminho que
-    não precisa dela; aqui, sob demanda, o custo faz sentido."""
+    """População + PIB per capita + total de empresas atuantes (todos os
+    ramos, IBGE/Cadastro Central de Empresas) de 1 município — funciona
+    para qualquer município do Brasil, não só onde há carteira. Quebra por
+    CNAE não existe aqui: o IBGE suprime esse nível de detalhe por
+    município (sigilo estatístico) — só o total é público nesse recorte."""
     camada = ibge_real.camada_para_ponto(municipio, uf)
     if not camada.get("disponivel"):
         return camada
     pib = ibge_real.pib_per_capita(camada["municipio_ibge_id"])
     camada["pib_per_capita_reais"] = pib["pib_per_capita_reais"] if pib else None
     camada["pib_ano_referencia"] = pib["pib_ano_referencia"] if pib else None
+    empresas = ibge_real.empresas_atuantes_total(camada["municipio_ibge_id"])
+    camada["empresas_atuantes_total"] = empresas["total"] if empresas else None
+    camada["empresas_atuantes_ano_referencia"] = empresas["ano"] if empresas else None
     return camada
 
 

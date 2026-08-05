@@ -166,22 +166,28 @@ def test_http_territorio_municipio_info_responde_com_camada_mockada(cliente_http
                                                "populacao_ano_referencia": 2024, "fonte": "IBGE (mock)"})
     monkeypatch.setattr(ibge_mod, "pib_per_capita",
                         lambda mid: {"pib_per_capita_reais": 55000.0, "pib_ano_referencia": 2023})
+    monkeypatch.setattr(ibge_mod, "empresas_atuantes_total",
+                        lambda mid: {"total": 230758, "ano": 2024})
     h = {"Authorization": f"Bearer {token_admin}"}
     r = cliente_http.get("/api/territorio/municipio-info?municipio=Curitiba&uf=PR", headers=h)
     assert r.status_code == 200
     body = r.json()
     assert body["populacao"] == 1_800_000
     assert body["pib_per_capita_reais"] == 55000.0
+    assert body["empresas_atuantes_total"] == 230758
 
 
-def test_http_territorio_municipio_info_sem_pib_nao_quebra(cliente_http, token_admin, monkeypatch):
+def test_http_territorio_municipio_info_sem_pib_ou_empresas_nao_quebra(cliente_http, token_admin, monkeypatch):
     from vendalytics.sources import ibge_real as ibge_mod
     monkeypatch.setattr(ibge_mod, "camada_para_ponto",
                         lambda municipio, uf: {"disponivel": True, "municipio_ibge_id": 4106902,
                                                "populacao": 1_800_000,
                                                "populacao_ano_referencia": 2024, "fonte": "IBGE (mock)"})
     monkeypatch.setattr(ibge_mod, "pib_per_capita", lambda mid: None)
+    monkeypatch.setattr(ibge_mod, "empresas_atuantes_total", lambda mid: None)
     h = {"Authorization": f"Bearer {token_admin}"}
     r = cliente_http.get("/api/territorio/municipio-info?municipio=Curitiba&uf=PR", headers=h)
     assert r.status_code == 200
-    assert r.json()["pib_per_capita_reais"] is None
+    body = r.json()
+    assert body["pib_per_capita_reais"] is None
+    assert body["empresas_atuantes_total"] is None

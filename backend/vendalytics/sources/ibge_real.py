@@ -37,6 +37,13 @@ AGREGADO_POPULACAO = 6579
 VARIAVEL_POPULACAO = 9324
 AGREGADO_PIB = 5938  # PIB dos Municípios (Contas Regionais, referência 2010)
 VARIAVEL_PIB_TOTAL = 37  # "Produto Interno Bruto a preços correntes", unidade Mil Reais
+AGREGADO_EMPRESAS = 9510  # Cadastro Central de Empresas (CEMPRE), 2022-2024
+VARIAVEL_EMPRESAS_ATUANTES = 367  # "Número de empresas e outras organizações atuantes"
+CATEGORIA_CNAE_TOTAL = 117897  # única categoria de CNAE disponível em nível de município —
+                               # a quebra por ramo é suprimida pelo IBGE nesse nível (sigilo
+                               # estatístico), confirmado ao vivo: toda consulta por CNAE
+                               # específico em N6 volta "-" mesmo para Curitiba, a maior
+                               # cidade do Paraná. Só o total (todos os ramos) é público aqui.
 
 
 def configurado() -> bool:
@@ -149,6 +156,35 @@ def pib_per_capita(municipio_ibge_id: int) -> dict | None:
         "populacao": pop["populacao"], "populacao_ano_referencia": pop["ano"],
         "pib_per_capita_reais": round(pib["pib_total_reais"] / pop["populacao"], 2),
     }
+
+
+def empresas_atuantes_total(municipio_ibge_id: int) -> dict | None:
+    """Total de empresas/organizações atuantes no município, TODOS os ramos
+    somados (Cadastro Central de Empresas, IBGE). `None` quando
+    indisponível. Só o total — o IBGE não publica a quebra por CNAE neste
+    nível geográfico (ver constante CATEGORIA_CNAE_TOTAL acima)."""
+    if not configurado():
+        return None
+    try:
+        r = httpx.get(
+            f"{BASE_AGREGADOS}/{AGREGADO_EMPRESAS}/periodos/-1/variaveis/{VARIAVEL_EMPRESAS_ATUANTES}",
+            params={"localidades": f"N6[{municipio_ibge_id}]",
+                    "classificacao": f"12762[{CATEGORIA_CNAE_TOTAL}]"},
+            timeout=config.HTTP_TIMEOUT_S)
+        r.raise_for_status()
+        corpo = r.json()
+        if not corpo:
+            return None
+        series = corpo[0]["resultados"][0]["series"][0]["serie"]
+        if not series:
+            return None
+        ano, valor = next(iter(series.items()))
+        if valor in ("-", "..", "X", None):
+            return None
+        return {"ano": int(ano), "total": int(valor)}
+    except (httpx.HTTPError, KeyError, IndexError, ValueError, StopIteration) as e:
+        log.warning("IBGE indisponível (agregado empresas atuantes): %s", e)
+        return None
 
 
 def camada_para_ponto(municipio: str, uf: str) -> dict:
