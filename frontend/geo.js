@@ -1,17 +1,8 @@
 // geo.js — simulador de ponto candidato, similaridade entre filiais e
 // previsão de faturamento com intervalo de confiança.
-const TOKEN = localStorage.getItem("vendalytics_token");
-if (!TOKEN) location.href = "login.html";
-
-async function api(path, opcoes = {}) {
-  const r = await fetch(path, {...opcoes, headers: {Authorization: "Bearer " + TOKEN}});
-  if (r.status === 401) { localStorage.clear(); location.href = "login.html"; throw new Error("sessão expirada"); }
-  if (!r.ok) throw new Error((await r.text()) || r.status);
-  return r.json();
-}
-
+// TOKEN, api() e sair() vêm de api.js (compartilhado, com timeout real).
 document.getElementById("btn-sair").addEventListener("click", (e) => {
-  e.preventDefault(); localStorage.clear(); location.href = "login.html";
+  e.preventDefault(); sair();
 });
 
 const brl = (v) => "R$ " + Number(v || 0).toLocaleString("pt-BR", {maximumFractionDigits: 0});

@@ -1,20 +1,8 @@
 // field.js — roteiro de campo: propensão + gap de mix local, correção de
 // dado em campo e registro de visita (loop fechado, spec D3).
-const TOKEN = localStorage.getItem("vendalytics_token");
-if (!TOKEN) location.href = "login.html";
-
-async function api(path, opcoes = {}) {
-  const r = await fetch(path, {
-    ...opcoes,
-    headers: {Authorization: "Bearer " + TOKEN, "Content-Type": "application/json"},
-  });
-  if (r.status === 401) { localStorage.clear(); location.href = "login.html"; throw new Error("sessão expirada"); }
-  if (!r.ok) throw new Error((await r.text()) || r.status);
-  return r.json();
-}
-
+// TOKEN, api() e sair() vêm de api.js (compartilhado, com timeout real).
 document.getElementById("btn-sair").addEventListener("click", (e) => {
-  e.preventDefault(); localStorage.clear(); location.href = "login.html";
+  e.preventDefault(); sair();
 });
 
 const brl = (v) => "R$ " + Number(v || 0).toLocaleString("pt-BR", {maximumFractionDigits: 0});
@@ -81,7 +69,7 @@ async function carregar() {
       : `<p class="vazio">Nenhuma parada priorizada hoje.</p>`;
     el.querySelectorAll(".bt-desfecho").forEach(b => b.addEventListener("click", () => registrarAcao(b)));
   } catch (e) {
-    el.innerHTML = `<p class="vazio">Falha ao carregar roteiro: ${e.message}</p>`;
+    el.innerHTML = erroComRetry(`Falha ao carregar roteiro: ${e.message}`, carregar);
   }
 }
 

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Território — Vendalytics</title>
+<link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+<canvas id="bg-canvas"></canvas>
+<div class="bg-gradient"></div>
+
+<header class="topo">
+  <span class="logo" data-tenant-nome>Vendalytics</span>
+  <nav class="nav">
+    <a href="index.html">Mapa &amp; Métricas</a>
+    <a href="fila.html">Fila do dia</a>
+    <a href="geo.html">Geo</a>
+    <a href="territorio.html" class="on" aria-current="page">Território</a>
+    <a href="reputacao.html">Reputação</a>
+    <a href="field.html">Campo</a>
+    <a href="admin.html">Admin</a>
+    <a href="#" id="btn-sair">Sair</a>
+  </nav>
+</header>
+
+<main>
+  <section class="fila-section" aria-label="Análise territorial">
+    <div class="fila-cabecalho">
+      <h1>Análise territorial — TAM → SAM → SOM</h1>
+      <p>Cobertura por município: quanto do mercado potencial (TAM) já está na carteira (SOM),
+         e o whitespace (contas no mercado que ainda não são clientes). Sem fonte externa de
+         universo de mercado configurada, mostra só a cobertura própria — nunca inventa TAM.</p>
+    </div>
+
+    <div class="gauges" id="resumo-territorio"></div>
+
+    <div id="aviso-tam"></div>
+
+    <div class="form-inline">
+      <select id="filtro-filial"><option value="">Todas as filiais</option></select>
+      <input type="text" id="filtro-segmento" placeholder="segmento (ex.: padaria) — vazio = padrão do tenant"/>
+      <input type="text" id="filtro-uf" placeholder="UF (ex.: PR)" style="width:70px"/>
+      <button id="btn-filtrar">Filtrar</button>
+    </div>
+
+    <div id="tabela-territorio"><p class="vazio">Carregando…</p></div>
+  </section>
+</main>
+
+<script src="branding.js"></script>
+<script src="api.js"></script>
+<script src="territorio.js"></script>
+</body>
+</html>

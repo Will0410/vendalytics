@@ -1,17 +1,8 @@
-const TOKEN = localStorage.getItem("vendalytics_token");
-if (!TOKEN) location.href = "login.html";
-
-const API_BASE = "";
-
-async function api(path) {
-  const r = await fetch(path, { headers: { Authorization: "Bearer " + TOKEN } });
-  if (r.status === 401) { localStorage.clear(); location.href = "login.html"; throw new Error("sessão expirada"); }
-  if (!r.ok) throw new Error(await r.text());
-  return r.json();
-}
-
+// TOKEN, api() e sair() vêm de api.js (compartilhado, com timeout real —
+// antes o mapa não tinha timeout nenhum e podia travar em silêncio igual
+// a fila/campo travavam).
 document.getElementById("btn-sair").addEventListener("click", (e) => {
-  e.preventDefault(); localStorage.clear(); location.href = "login.html";
+  e.preventDefault(); sair();
 });
 
 function kpiRingHTML(valor, rotulo, pct) {
@@ -211,6 +202,10 @@ async function carregarMapa() {
 
 document.addEventListener("DOMContentLoaded", () => {
   initParticles();
-  carregarKpis().catch(e => console.error(e));
-  carregarMapa().catch(e => console.error(e));
+  carregarKpis().catch(e => {
+    console.error(e);
+    document.getElementById("kpis").innerHTML =
+      erroComRetry(`Não foi possível carregar os indicadores: ${e.message}`, () => carregarKpis().catch(console.error));
+  });
+  carregarMapa().catch(e => console.error(e));   // mapa Leaflet já tem seus próprios controles; erro só vai pro console aqui
 });

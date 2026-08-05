@@ -84,6 +84,37 @@ def _startup():
             log.warning(
                 "Fonte de dados sem dado carregado — rode "
                 "`python -m demo_data.seed` para gerar a base de demonstração.")
+    _prequecer_modelo_de_propensao()
+
+
+def _prequecer_modelo_de_propensao() -> None:
+    """Treina o modelo de propensão AGORA, no boot do servidor, em vez de na
+    primeira visita de um usuário à Fila do dia/Campo.
+
+    Por que isso importa de verdade: o treino é gradient descent puro Python
+    sobre toda a carteira, e em CPU compartilhada/limitada (ex.: Render free
+    tier) é caro o bastante para estourar o timeout de uma request HTTP —
+    era exatamente por isso que essas telas ficavam presas em "Carregando..."
+    para sempre. Mover o custo para o startup (onde alguns segundos a mais
+    não incomodam ninguém, e falha não derruba a aplicação) resolve isso sem
+    tocar em UI nenhuma. O cache de `fila._modelo_de` (15 min) faz o resto:
+    todo request de usuário dentro dessa janela reaproveita este treino."""
+    import time
+    try:
+        escopo = context.escopo_de_sistema(tenant.carregar().nome_curto, motivo="prequecer-modelo")
+        t0 = time.perf_counter()
+        with context.ativar(escopo):
+            modelo = fila._modelo_de("")
+        segundos = time.perf_counter() - t0
+        if modelo is None:
+            log.info("Pré-aquecimento: sem histórico suficiente para treinar ainda (%.1fs).", segundos)
+        else:
+            log.info("Modelo de propensão pré-aquecido em %.1fs (AUC out-of-time: %s).",
+                     segundos, modelo.metricas.get("auc_out_of_time"))
+    except Exception as e:
+        # Nunca derruba o startup por causa disto — pior caso, a primeira
+        # request de usuário treina na hora, como acontecia antes.
+        log.warning("Pré-aquecimento do modelo falhou (seguindo sem ele): %s", e)
 
 
 def _seed_demo_se_vazio() -> None:

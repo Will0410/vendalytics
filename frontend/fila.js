@@ -1,18 +1,9 @@
-const TOKEN = localStorage.getItem("vendalytics_token");
-if (!TOKEN) location.href = "login.html";
-
-async function api(path, opcoes = {}) {
-  const r = await fetch(path, {
-    ...opcoes,
-    headers: { Authorization: "Bearer " + TOKEN, "Content-Type": "application/json" },
-  });
-  if (r.status === 401) { localStorage.clear(); location.href = "login.html"; throw new Error("sessão expirada"); }
-  if (!r.ok) throw new Error((await r.text()) || r.status);
-  return r.json();
-}
-
+// TOKEN, api() e sair() vêm de api.js (compartilhado — ver esse arquivo
+// pra entender o timeout/retry: antes cada página duplicava um fetch sem
+// timeout, e era exatamente por isso que a tela ficava presa em
+// "Carregando..." pra sempre quando o servidor demorava).
 document.getElementById("btn-sair").addEventListener("click", (e) => {
-  e.preventDefault(); localStorage.clear(); location.href = "login.html";
+  e.preventDefault(); sair();
 });
 
 const brl = (v) => "R$ " + Number(v || 0).toLocaleString("pt-BR", { maximumFractionDigits: 0 });
@@ -199,7 +190,7 @@ async function carregar() {
     alvo.querySelectorAll(".bt-desfecho").forEach(b =>
       b.addEventListener("click", () => registrarDesfecho(b)));
   } catch (e) {
-    alvo.innerHTML = `<p class="vazio">Não foi possível carregar a fila: ${e.message}</p>`;
+    alvo.innerHTML = erroComRetry(`Não foi possível carregar a fila: ${e.message}`, carregar);
     console.error(e);
   }
 }

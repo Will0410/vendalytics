@@ -195,7 +195,22 @@ class Modelo:
 
 
 def _treinar(X: list[list[float]], y: list[int], *, iteracoes: int = 3000,
-             taxa: float = 0.3, l2: float = 1e-3) -> Modelo:
+             taxa: float = 0.3, l2: float = 1e-3,
+             verificar_a_cada: int = 25, tolerancia: float = 1e-5) -> Modelo:
+    """Gradient descent puro Python — sem numpy, mesmo racional de sempre
+    (zero dependência pesada). `iteracoes` é o TETO, não a meta: a maior
+    parte dos treinos converge bem antes disso, e rodar até o teto sem
+    checar convergência é o maior custo de CPU deste módulo — sensível de
+    verdade num ambiente com CPU compartilhada/limitada (ex.: Render free
+    tier), onde é literalmente a diferença entre a fila carregar ou a
+    página travar em "carregando" até a request estourar.
+
+    Parada antecipada: a cada `verificar_a_cada` iterações, compara o
+    log-loss médio contra a checagem anterior; para se a melhora for menor
+    que `tolerancia`. Não muda o RESULTADO do modelo (ele já teria
+    convergido para perto disso de qualquer forma) — muda só quanto tempo
+    se gasta rodando depois que já convergiu.
+    """
     n, p = len(X), len(X[0])
     media = [sum(linha[j] for linha in X) / n for j in range(p)]
     desvio = []
@@ -208,18 +223,34 @@ def _treinar(X: list[list[float]], y: list[int], *, iteracoes: int = 3000,
 
     coef = [0.0] * p
     b = math.log(max(sum(y), 1) / max(n - sum(y), 1))  # intercepto na taxa-base
-    for _ in range(iteracoes):
+    perda_anterior = None
+    for it in range(iteracoes):
         gc = [0.0] * p
         gb = 0.0
+        perda = 0.0
+        checar = (it + 1) % verificar_a_cada == 0
         for i in range(n):
             z = b + sum(coef[j] * Xs[i][j] for j in range(p))
-            erro = 1.0 / (1.0 + math.exp(-max(min(z, 35.0), -35.0))) - y[i]
+            z_clamp = max(min(z, 35.0), -35.0)
+            pred = 1.0 / (1.0 + math.exp(-z_clamp))
+            erro = pred - y[i]
             gb += erro
             for j in range(p):
                 gc[j] += erro * Xs[i][j]
+            if checar:
+                # log-loss com epsilon para não bater em log(0) quando o
+                # modelo já está bem confiante e acerta.
+                pred_c = min(max(pred, 1e-12), 1 - 1e-12)
+                perda += -(y[i] * math.log(pred_c) + (1 - y[i]) * math.log(1 - pred_c))
         b -= taxa * gb / n
         for j in range(p):
             coef[j] -= taxa * (gc[j] / n + l2 * coef[j])
+
+        if checar:
+            perda = perda / n
+            if perda_anterior is not None and (perda_anterior - perda) < tolerancia:
+                break
+            perda_anterior = perda
     return Modelo(coeficientes=coef, intercepto=b, media=media, desvio=desvio,
                   treinado_em=datetime.now().isoformat(timespec="seconds"))
 
