@@ -84,6 +84,16 @@ def test_raio_aproximado_e_maior_que_linha_reta():
     assert raio_aproximado_km(5.0) > 5.0
 
 
+@pytest.fixture(autouse=True)
+def geocoding_desligado_por_padrao(monkeypatch):
+    """Sem isso, todo teste desta suíte chamaria a API real do Nominatim
+    (rede, rate-limit de 1 req/s, resultado não-determinístico) — os testes
+    continuam sem rede por padrão; quem quiser testar geocoding real usa
+    @pytest.mark.network e faz o monkeypatch por conta própria."""
+    from vendalytics.modules import geo as geo_mod
+    monkeypatch.setattr(geo_mod.geocoding_real, "municipio_de", lambda lat, lon: None)
+
+
 # ── simulação de ponto ────────────────────────────────────────────────────
 def test_ponto_no_meio_da_area_densa_pontua_alto(escopo_irrestrito):
     r = geo.simular_ponto(-23.552, -46.628, raio_km=2.0)
@@ -120,11 +130,34 @@ def test_camada_ibge_entra_no_score_quando_disponivel(escopo_irrestrito, monkeyp
     vira FATOR de verdade e passa a compor o score (peso realocado de
     0,6/0,4 para 0,45/0,35/0,20 — ver geo.py)."""
     from vendalytics.modules import geo as geo_mod
+    monkeypatch.setattr(geo_mod.geocoding_real, "municipio_de",
+                        lambda lat, lon: {"municipio": "São Paulo", "uf": "SP",
+                                          "uf_nome": "São Paulo"})
     monkeypatch.setattr(geo_mod.ibge_real, "camada_para_ponto",
                         lambda municipio, uf: {"disponivel": True, "populacao": 1_800_000,
                                                "populacao_ano_referencia": 2024, "fonte": "IBGE (mock)"})
     r = geo.simular_ponto(-23.552, -46.628, raio_km=2.0)
     assert r["disponivel"]
+    assert any(f["fator"] == "sociodemografico_ibge" for f in r["fatores"])
+    assert "sociodemografico" not in r["componentes_nao_disponiveis"]
+
+
+def test_geocoding_resolve_municipio_sem_cliente_proximo(escopo_irrestrito, monkeypatch):
+    """O motivo desta integração: um ponto sem NENHUM cliente por perto (então
+    o antigo fallback por 'cliente mais próximo' não tem o que usar) ainda
+    assim ganha camada sociodemográfica quando a geocodificação reversa
+    resolve o município — 'analise a região que eu escolher' funciona em
+    qualquer lugar, não só onde já há carteira."""
+    from vendalytics.modules import geo as geo_mod
+    monkeypatch.setattr(geo_mod.geocoding_real, "municipio_de",
+                        lambda lat, lon: {"municipio": "Ponta Grossa", "uf": "PR",
+                                          "uf_nome": "Paraná"})
+    monkeypatch.setattr(geo_mod.ibge_real, "camada_para_ponto",
+                        lambda municipio, uf: {"disponivel": True, "populacao": 358_000,
+                                               "populacao_ano_referencia": 2024,
+                                               "fonte": "IBGE (mock)"})
+    r = geo.simular_ponto(-10.0, -60.0, raio_km=2.0)  # Amazônia, longe de tudo
+    assert r["municipio"] == {"municipio": "Ponta Grossa", "uf": "PR", "uf_nome": "Paraná"}
     assert any(f["fator"] == "sociodemografico_ibge" for f in r["fatores"])
     assert "sociodemografico" not in r["componentes_nao_disponiveis"]
 

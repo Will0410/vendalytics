@@ -46,21 +46,24 @@ def _escopo(escopo_irrestrito):
     yield
 
 
-def test_cobertura_nao_depende_de_fonte_externa(carteira_dois_municipios):
+def test_cobertura_independe_de_ter_universo_cacheado(carteira_dois_municipios):
+    """SOM (cobertura própria) nunca depende do cache de universo estar
+    populado — só da carteira do tenant, que sempre existe localmente."""
     r = mercado.cobertura()
-    assert r["fonte_tam"] == "não configurada"
+    assert r["fonte_tam"] == "disponível"  # RFB pública, sem chave — sempre ligada
     por_municipio = {(m["municipio"], m["segmento"]): m for m in r["municipios"]}
     assert por_municipio[("Canoas", "mercados")]["total"] == 3
     assert por_municipio[("Canoas", "mercados")]["ativos"] == 2
     assert por_municipio[("Porto Alegre", "padarias")]["ativos"] == 1
 
 
-def test_tam_sam_som_sem_fonte_externa_nao_finge_whitespace(carteira_dois_municipios):
-    """Regressão central do módulo: sem CORTEX_API_URL, whitespace é `None`
-    (não calculável), nunca `0` (que afirmaria 'sem oportunidade')."""
-    r = mercado.tam_sam_som()
+def test_tam_sam_som_sem_universo_cacheado_nao_finge_whitespace(carteira_dois_municipios):
+    """Regressão central do módulo: fonte ligada mas cache de universo ainda
+    vazio para o segmento — whitespace é `None` (não calculável), nunca `0`
+    (que afirmaria 'sem oportunidade')."""
+    r = mercado.tam_sam_som(segmento="mercados")
     assert r["tam_disponivel"] is False
-    assert r["aviso"] is not None and "CORTEX_API_URL" in r["aviso"]
+    assert r["aviso"] is not None and "cache de mercado" in r["aviso"]
     for m in r["municipios"]:
         assert m["tam"] is None
         assert m["whitespace"] is None

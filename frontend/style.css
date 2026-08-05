@@ -977,6 +977,7 @@ body {
   background: var(--glass-bg); border: 1px solid var(--glass-border); border-radius: var(--radius);
   padding: var(--space-5); overflow-y: auto; max-height: 55vh;
 }
+.geo-regiao { font-size: 13px; font-weight: 600; color: #e2e8f0; margin-bottom: var(--space-2); }
 .geo-score { font-family: var(--font-mono); font-size: 42px; font-weight: 700; line-height: 1; }
 .geo-score-label { font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: .04em; margin: var(--space-1) 0 var(--space-4); }
 

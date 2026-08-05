@@ -50,10 +50,12 @@ TENANT_CONFIG_PATH = Path(os.getenv("VENDALYTICS_TENANT_CONFIG", str(PROJECT_ROO
 
 DEMO_MODE = os.getenv("DEMO_MODE", "true").strip().lower() in ("1", "true", "yes")
 
-# Fonte externa OPCIONAL de universo de mercado (TAM), p/ Território (A2).
-# Vazio = módulo de Território opera só com cobertura própria (SOM), sem TAM.
-CORTEX_API_URL = os.getenv("CORTEX_API_URL", "").strip().rstrip("/")
-CORTEX_TIMEOUT_S = float(os.getenv("CORTEX_TIMEOUT_S", "10"))
+# Universo de mercado (TAM) p/ Território (A2): antes uma chamada HTTP a um
+# projeto irmão separado, agora consolidado neste repositório
+# (sources/rfb_real.py + sources/mercado_publico_cache.py). Flag só para
+# desligar em teste/CI; API é pública e sem chave, então não há "não
+# configurado" de verdade em produção.
+RFB_DESATIVADO = os.getenv("VENDALYTICS_RFB_DESATIVADO", "").strip().lower() in ("1", "true", "yes")
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile").strip()

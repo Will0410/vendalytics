@@ -39,8 +39,12 @@ async function simular(lat, lon) {
       <span class="txt">${f.rotulo}</span></li>`).join("");
     const ausentesHTML = Object.entries(r.componentes_nao_disponiveis || {}).map(([k, v]) =>
       `<li class="fator"><span class="txt" style="color:#64748b">${k}: indisponível — ${v}</span></li>`).join("");
+    const regiaoHTML = r.municipio
+      ? `<div class="geo-regiao">📍 ${r.municipio.municipio}/${r.municipio.uf}</div>`
+      : `<div class="geo-regiao" style="color:#64748b">Município não identificado para este ponto</div>`;
 
     painel.innerHTML = `
+      ${regiaoHTML}
       <div class="geo-score" style="color:${cor}">${r.score_atratividade}</div>
       <div class="geo-score-label">score de atratividade (0–100)</div>
       <ul class="fatores">${fatoresHTML}${ausentesHTML}</ul>
