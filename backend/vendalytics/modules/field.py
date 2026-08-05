@@ -38,15 +38,21 @@ RESOLUCAO_PEER = 0.02  # ~2km — célula mais grossa que a de geo.py: "vizinho
                        # de rota", não "vizinho de esquina".
 
 
-def _peers(cliente: dict, filial: str) -> list[dict]:
+def _peers(cliente: dict, filial: str, *, candidatos: list[dict] | None = None) -> list[dict]:
     """Clientes na mesma célula geográfica e mesmo segmento — a definição de
     "vizinho" deste MVP. Sem H3/clustering real (spec B2), é a aproximação
-    honesta possível com o dado disponível hoje."""
+    honesta possível com o dado disponível hoje.
+
+    `candidatos`: lista de clientes já carregada pelo chamador (opcional).
+    `roteiro_do_dia` recalcula o gap para cada parada da fila — sem isso,
+    cada uma das N paradas recarregaria a base inteira de clientes do zero
+    (N consultas idênticas em vez de 1)."""
     if not cliente.get("lat") or not cliente.get("lon"):
         return []
     minha_celula = celula(cliente["lat"], cliente["lon"], RESOLUCAO_PEER)
     meu_segmento = cliente.get("segmento")
-    candidatos = data_layer.query_clientes(filial=filial, limit=100000)["clientes"]
+    if candidatos is None:
+        candidatos = data_layer.query_clientes(filial=filial, limit=100000)["clientes"]
     return [
         c for c in candidatos
         if str(c["id"]) != str(cliente["id"])
@@ -57,7 +63,7 @@ def _peers(cliente: dict, filial: str) -> list[dict]:
 
 
 def gap_cliente(cliente_id: str, *, meses: int = JANELA_MESES_PADRAO,
-                max_peers: int = 40) -> dict:
+                max_peers: int = 40, candidatos: list[dict] | None = None) -> dict:
     """Gap de mix no nível do cliente: categorias que os vizinhos compram e
     este cliente não, priorizadas por penetração entre os vizinhos × valor
     médio gasto por eles — não é whitespace da carteira inteira (já coberto
@@ -67,17 +73,22 @@ def gap_cliente(cliente_id: str, *, meses: int = JANELA_MESES_PADRAO,
     if not cliente:
         return {"disponivel": False, "motivo": "cliente não encontrado"}
 
-    peers = _peers(cliente, cliente.get("filial", ""))[:max_peers]
+    peers = _peers(cliente, cliente.get("filial", ""), candidatos=candidatos)[:max_peers]
     if len(peers) < 3:
         return {"disponivel": False,
                 "motivo": f"menos de 3 vizinhos geográficos/segmento (achou {len(peers)}) "
                           f"— gap local não é confiável com amostra tão pequena"}
 
-    minhas_categorias = {p["categoria"] for p in data_layer.mix_produtos_cliente(cliente_id, meses=meses)}
+    # 1 consulta para o cliente + todos os peers, em vez de 1+len(peers)
+    # consultas separadas — é o que mantém "campo → roteiro do dia" rápido
+    # o bastante para não estourar o timeout do frontend em CPU limitada.
+    ids = [cliente_id] + [str(p["id"]) for p in peers]
+    mix_por_cliente = data_layer.mix_categorias_por_clientes(ids, meses=meses)
+    minhas_categorias = {p["categoria"] for p in mix_por_cliente.get(cliente_id, [])}
 
     por_categoria: dict[str, dict] = defaultdict(lambda: {"peers_compraram": 0, "valor_total": 0.0})
     for peer in peers:
-        for p in data_layer.mix_produtos_cliente(str(peer["id"]), meses=meses):
+        for p in mix_por_cliente.get(str(peer["id"]), []):
             cat = por_categoria[p["categoria"]]
             cat["peers_compraram"] += 1
             cat["valor_total"] += float(p.get("valor") or 0)
@@ -115,10 +126,11 @@ def _argumento(gap: dict) -> str:
            f"este cliente ainda não comprou.")
 
 
-def sugestao_para_cliente(cliente_id: str, *, top_n: int = 3) -> dict:
+def sugestao_para_cliente(cliente_id: str, *, top_n: int = 3,
+                          candidatos: list[dict] | None = None) -> dict:
     """A pergunta do vendedor de campo: "o que levo para este cliente hoje?"
     Resposta grounded, com o argumento de cada sugestão explícito."""
-    g = gap_cliente(cliente_id)
+    g = gap_cliente(cliente_id, candidatos=candidatos)
     if not g["disponivel"]:
         return g
     sugestoes = [
@@ -143,9 +155,14 @@ def roteiro_do_dia(*, filial: str = "", limite: int = 12) -> dict:
     if not r["disponivel"]:
         return {"disponivel": False, "motivo": r["motivo"]}
 
+    # Carregado 1 vez para as N paradas, não 1 vez por parada — é a base de
+    # candidatos a "vizinho geográfico" que `_peers` usaria de qualquer
+    # jeito, idêntica a cada chamada (mesma filial, mesmo escopo).
+    candidatos = data_layer.query_clientes(filial=filial, limit=100000)["clientes"]
+
     paradas = []
     for item in r["itens"]:
-        sugestao = sugestao_para_cliente(item["cliente_id"], top_n=2)
+        sugestao = sugestao_para_cliente(item["cliente_id"], top_n=2, candidatos=candidatos)
         paradas.append({
             "cliente_id": item["cliente_id"],
             "score_propensao": item["score"],

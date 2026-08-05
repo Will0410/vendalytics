@@ -67,6 +67,14 @@ class DataSourceAdapter(ABC):
         """Produtos/categorias que este cliente comprou na janela recente."""
 
     @abstractmethod
+    def mix_categorias_por_clientes(self, customer_ids: list[str], meses: int = 3) -> dict[str, list[dict]]:
+        """Igual a `mix_produtos_cliente`, mas em lote (1 consulta para N
+        clientes) — existe porque `modules/field.py` precisa disso para até
+        dezenas de "vizinhos" por cliente da fila, e N chamadas separadas
+        (N conexões SQLite abertas/fechadas) é caro demais para rodar em
+        CPU compartilhada/limitada (ex.: Render free tier)."""
+
+    @abstractmethod
     def catalogo_produtos(self, filiais: tuple[str, ...] = ()) -> list[dict]:
         """Catálogo de produtos disponíveis (para gap de mix)."""
 

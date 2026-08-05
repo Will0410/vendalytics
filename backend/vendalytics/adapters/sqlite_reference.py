@@ -220,6 +220,25 @@ class SQLiteReferenceAdapter(DataSourceAdapter):
                 (customer_id, f"-{int(meses) * 30} day")).fetchall()
         return [dict(r) for r in rows]
 
+    def mix_categorias_por_clientes(self, customer_ids: list[str], meses: int = 3) -> dict[str, list[dict]]:
+        if not customer_ids:
+            return {}
+        placeholders = ",".join("?" for _ in customer_ids)
+        with closing(self._con()) as con:
+            rows = con.execute(
+                f"""SELECT v.cliente_id AS cliente_id, p.categoria AS categoria,
+                          SUM(i.quantidade*i.valor_unitario) AS valor
+                   FROM vendas v JOIN vendas_itens i ON i.venda_id = v.id
+                   JOIN produtos p ON p.id = i.produto_id
+                   WHERE v.cliente_id IN ({placeholders}) AND v.data_venda >= date('now', ?)
+                   GROUP BY v.cliente_id, p.categoria""",
+                (*customer_ids, f"-{int(meses) * 30} day")).fetchall()
+        por_cliente: dict[str, list[dict]] = {cid: [] for cid in customer_ids}
+        for r in rows:
+            por_cliente.setdefault(r["cliente_id"], []).append(
+                {"categoria": r["categoria"], "valor": r["valor"]})
+        return por_cliente
+
     def catalogo_produtos(self, filiais: tuple[str, ...] = ()) -> list[dict]:
         # `produtos` não tem coluna de filial neste schema de referência: o
         # catálogo é global. O parâmetro fica no contrato porque adapters de

@@ -94,9 +94,29 @@ def processar_pendentes(*, limite: int = 500) -> dict:
 
 def ajustes_de_prioridade(sujeito_tipo: str, sujeito_id: str, *, dias: int = 30) -> dict:
     """Resumo dos ajustes ativos sobre um cliente: penalidade acumulada e se
-    está sinalizado para exclusão. `fila.py` consulta isto por item da fila."""
+    está sinalizado para exclusão. Uso pontual (ex.: `fila.py` explicando 1
+    cliente); para a fila inteira, ver `ajustes_de_prioridade_em_lote`."""
     ajustes = scores.sinais_recentes(sujeito_tipo, sujeito_id, "sales.priority_adjustment", dias=dias)
     flags = scores.sinais_recentes(sujeito_tipo, sujeito_id, "sales.account_flagged", dias=dias)
+    return _resumir_ajuste(ajustes, flags)
+
+
+def ajustes_de_prioridade_em_lote(sujeito_tipo: str, sujeito_ids: list[str],
+                                  *, dias: int = 30) -> dict[str, dict]:
+    """Igual a `ajustes_de_prioridade`, para N sujeitos em 2 consultas (não
+    2×N) — `fila.py` precisa disto para TODOS os clientes pontuados antes
+    de escolher os poucos que entram na fila, não só os selecionados."""
+    if not sujeito_ids:
+        return {}
+    todos_ajustes = scores.sinais_recentes_em_lote(
+        sujeito_tipo, sujeito_ids, "sales.priority_adjustment", dias=dias)
+    todos_flags = scores.sinais_recentes_em_lote(
+        sujeito_tipo, sujeito_ids, "sales.account_flagged", dias=dias)
+    return {sid: _resumir_ajuste(todos_ajustes.get(sid, []), todos_flags.get(sid, []))
+            for sid in sujeito_ids}
+
+
+def _resumir_ajuste(ajustes: list[dict], flags: list[dict]) -> dict:
     penalidade_pct = sum(a["payload"].get("ajuste_pct", 0) for a in ajustes)
     return {
         "penalidade_pct": max(penalidade_pct, -80),  # nunca zera o cliente por acúmulo de sinais

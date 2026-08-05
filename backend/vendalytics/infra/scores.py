@@ -166,6 +166,39 @@ def sinais_recentes(sujeito_tipo: str, sujeito_id: str, tipo: str, *, dias: int 
     return saida
 
 
+def sinais_recentes_em_lote(sujeito_tipo: str, sujeito_ids: list[str], tipo: str,
+                            *, dias: int = 30) -> dict[str, list[dict]]:
+    """Igual a `sinais_recentes`, mas para N sujeitos numa consulta só.
+
+    Por que isto existe: `fila.py` chamava `sinais_recentes` 2x por cliente
+    PONTUADO (não só os poucos selecionados pra fila) — em produção isso é
+    o banco operacional (Postgres via DATABASE_URL), então cada chamada é
+    uma conexão de rede nova. Com ~1000 clientes isso é ~2000 conexões
+    seguidas por carregamento de página, caro o bastante pra estourar
+    timeout de frontend sozinho, sem nenhum modelo pesado envolvido."""
+    escopo = context.atual()  # exigido mesmo com lista vazia — mesma regra de toda leitura
+    if not sujeito_ids:
+        return {}
+    corte = (datetime.now(timezone.utc) - timedelta(days=int(dias))).isoformat()
+    placeholders = ",".join("?" for _ in sujeito_ids)
+    with db.conexao() as con:
+        rows = con.execute(
+            f"""SELECT * FROM sinais
+               WHERE tenant_id=? AND sujeito_tipo=? AND sujeito_id IN ({placeholders}) AND tipo=?
+               AND ocorrido_em >= ?
+               ORDER BY ocorrido_em DESC""",
+            (escopo.tenant_id, sujeito_tipo, *sujeito_ids, tipo, corte)).fetchall()
+    por_sujeito: dict[str, list[dict]] = {sid: [] for sid in sujeito_ids}
+    for r in rows:
+        d = dict(r)
+        try:
+            d["payload"] = json.loads(d.get("payload") or "{}")
+        except (ValueError, TypeError):
+            pass
+        por_sujeito.setdefault(d["sujeito_id"], []).append(d)
+    return por_sujeito
+
+
 def sinais_nao_processados(*, limit: int = 500) -> list[dict]:
     """Sinais do tenant corrente ainda não vistos pelo reactor (spec §3.6:
     "consumidores independentes por módulo"). O estado de leitura vive em

@@ -80,6 +80,14 @@ def diaria(*, filial: str = "", limite: int = 12, persistir: bool = True) -> dic
     reactor.processar_pendentes()
 
     pontuados = propensao.pontuar(modelo, filial=filial)
+    # 1 consulta em lote para os ajustes de TODOS os pontuados, não 1 por
+    # cliente: com a carteira inteira pontuada aqui (não só os N da fila),
+    # o banco operacional em produção é Postgres via DATABASE_URL — cada
+    # chamada individual seria uma conexão de rede nova, caro o bastante
+    # pra estourar timeout de frontend sozinho.
+    ajustes_por_cliente = reactor.ajustes_de_prioridade_em_lote(
+        "cliente", [p["cliente_id"] for p in pontuados])
+
     ativos, excluidos_por_sinal = [], 0
     for p in pontuados:
         ticket = p["features"]["ticket_medio"]
@@ -91,7 +99,7 @@ def diaria(*, filial: str = "", limite: int = 12, persistir: bool = True) -> dic
         # valor inventado para preencher a UI.
         p["confianca"] = round(2 * abs(p["probabilidade"] - 0.5), 3)
 
-        ajuste = reactor.ajustes_de_prioridade("cliente", p["cliente_id"])
+        ajuste = ajustes_por_cliente[p["cliente_id"]]
         if ajuste["sinalizado_para_exclusao"]:
             # Recomendar visita a um PDV reportado como fechado é pior que
             # não recomendar nada — sai da fila até a curadoria confirmar.

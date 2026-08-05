@@ -103,6 +103,18 @@ def mix_produtos_cliente(customer_id: str, meses: int = 3) -> list[dict]:
     return _adapter().mix_produtos_cliente(customer_id, meses=meses)
 
 
+def mix_categorias_por_clientes(customer_ids: list[str], meses: int = 3) -> dict[str, list[dict]]:
+    """Versão em lote de `mix_produtos_cliente`, para quando o chamador
+    precisa do mix de várias dezenas de clientes de uma vez (ex.: peers
+    geográficos em `modules/field.py`) — 1 consulta em vez de N. Os IDs já
+    vêm de uma listagem escopada (ex.: `query_clientes`), então não repete
+    o check de alcance por item aqui (seria redundante, não a única
+    barreira) — mas ainda exige escopo ativo, como toda função de leitura
+    desta fachada (ver docstring do módulo)."""
+    context.atual()
+    return _adapter().mix_categorias_por_clientes(customer_ids, meses=meses)
+
+
 def catalogo_produtos(filial: str = "") -> list[dict]:
     return _adapter().catalogo_produtos(filiais=_filiais(filial))
 
