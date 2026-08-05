@@ -27,6 +27,7 @@ from .integracoes.hubspot_real import HubSpotConnector
 from .integracoes.newsapi_real import NewsAPIMentionSource
 from .integracoes.salesforce_real import SalesforceConnector
 from .integracoes.whapi_real import WhapiMessagingConnector
+from .sources import mercado_externo
 from .modules import (agente, comite, comunicacao_kpi, contactabilidade,
                       executivo, field, fila, geo, identidade, mapa, mercado,
                       metrics, mix, orquestrador, recompra, relatorio,
@@ -249,9 +250,24 @@ def territorio_cobertura(filial: str = "", user: dict = Depends(auth.get_current
 def territorio_tam_sam_som(filial: str = "", segmento: str = "", uf: str = "",
                            user: dict = Depends(auth.get_current_user)):
     """TAM→SAM→SOM + whitespace por município. `tam_disponivel=false` e
-    `aviso` preenchido quando não há fonte externa de universo configurada
-    (CORTEX_API_URL) — nunca finge whitespace=0 por falta de dado."""
+    `aviso` preenchido quando o cache de mercado público ainda não tem
+    nenhuma empresa do segmento catalogada — nunca finge whitespace=0 por
+    falta de dado. Ver `/api/territorio/enriquecer-cnpj/{cnpj}` para
+    alimentar o cache."""
     return mercado.tam_sam_som(filial=filial, segmento=segmento, uf=uf)
+
+
+@app.get("/api/territorio/enriquecer-cnpj/{cnpj}")
+def territorio_enriquecer_cnpj(cnpj: str, user: dict = Depends(auth.get_current_user)):
+    """Consulta 1 CNPJ real na Receita Federal (BrasilAPI) e adiciona ao
+    cache de mercado público — é assim que o universo do TAM cresce (não
+    existe "baixar tudo de uma vez" sem o dump oficial da RFB, dezenas de
+    GB). Uso típico: enriquecer um prospect novo, ou rodar sobre uma lista
+    de CNPJs conhecidos da praça antes de olhar o TAM→SAM→SOM."""
+    empresa = mercado_externo.consultar_e_cachear(cnpj)
+    if empresa is None:
+        raise HTTPException(404, "CNPJ inválido, não encontrado, ou fonte indisponível")
+    return empresa
 
 
 @app.get("/api/territorio/simular-carteiras")

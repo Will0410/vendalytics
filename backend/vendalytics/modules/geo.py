@@ -35,7 +35,7 @@ import math
 from .. import data_layer
 from ..infra import audit, context
 from ..infra.geo import haversine_km, raio_aproximado_km
-from ..sources import ibge_real
+from ..sources import geocoding_real, ibge_real
 from . import verticais
 
 # Expoente de decaimento: quanto mais alto, mais rápido a "gravidade" de um
@@ -116,19 +116,24 @@ def simular_ponto(lat: float, lon: float, *, filial: str = "", raio_km: float = 
                               f"ponderado por proximidade (modelo de Huff)",
                     "contribuicao_pct": round(score_valor, 1)})
 
-    # Componente 3: camada sociodemográfica real (IBGE, spec B4) — só entra
-    # se der para resolver o município do ponto. Não há geocodificação
-    # reversa gratuita no IBGE, então o município vem do cliente mais
-    # próximo dentro do raio (aproximação honesta: "provavelmente é a
-    # mesma cidade", não uma verdade geométrica).
+    # Componente 3: camada sociodemográfica real (IBGE, spec B4) — para
+    # QUALQUER ponto clicado, não só perto de cliente cadastrado. Resolve o
+    # município por geocodificação reversa real (Nominatim/OSM); se essa
+    # API estiver fora do ar, cai para o cliente mais próximo como
+    # aproximação (melhor um palpite razoável do que nenhum dado).
     componentes_ausentes = {
-        "pressao_competitiva": "sem base de concorrentes georreferenciada",
+        "pressao_competitiva": "sem base de concorrentes georreferenciada "
+                               "(Overpass/OSM tentado e indisponível neste ambiente)",
     }
     score_socio = None
-    if proximos:
+    municipio_ponto = geocoding_real.municipio_de(lat, lon)
+    if municipio_ponto is None and proximos:
         c_mais_perto = min(proximos, key=lambda par: par[1])[0]
-        camada = ibge_real.camada_para_ponto(c_mais_perto.get("municipio", ""),
-                                             c_mais_perto.get("uf", ""))
+        if c_mais_perto.get("municipio") and c_mais_perto.get("uf"):
+            municipio_ponto = {"municipio": c_mais_perto["municipio"], "uf": c_mais_perto["uf"]}
+
+    if municipio_ponto:
+        camada = ibge_real.camada_para_ponto(municipio_ponto["municipio"], municipio_ponto["uf"])
         if camada.get("disponivel"):
             # Proxy simples e documentado: cidade grande = mercado potencial
             # maior. Não é renda nem estrutura etária (a spec pede isso
@@ -136,14 +141,17 @@ def simular_ponto(lat: float, lon: float, *, filial: str = "", raio_km: float = 
             score_socio = min(camada["populacao"] / 500_000, 1.0) * 100
             fatores.append({
                 "fator": "sociodemografico_ibge",
-                "rotulo": f"município de {camada['populacao']:,} habitantes "
+                "rotulo": f"{municipio_ponto['municipio']}/{municipio_ponto['uf']}: "
+                          f"{camada['populacao']:,} habitantes "
                           f"(IBGE, estimativa {camada['populacao_ano_referencia']})",
                 "contribuicao_pct": round(score_socio, 1),
             })
         else:
             componentes_ausentes["sociodemografico"] = camada.get("motivo", "IBGE indisponível")
     else:
-        componentes_ausentes["sociodemografico"] = "sem cliente próximo para inferir o município"
+        componentes_ausentes["sociodemografico"] = (
+            "não foi possível identificar o município deste ponto (geocodificação "
+            "indisponível e nenhum cliente próximo para aproximar)")
 
     if score_socio is not None:
         score = round(0.45 * score_densidade + 0.35 * score_valor + 0.20 * score_socio, 1)
@@ -156,6 +164,7 @@ def simular_ponto(lat: float, lon: float, *, filial: str = "", raio_km: float = 
     resultado = {
         "disponivel": True,
         "lat": lat, "lon": lon, "raio_km": raio_km,
+        "municipio": municipio_ponto,   # {municipio, uf} ou None — de onde vieram os dados de mercado
         "score_atratividade": score,
         "fatores": fatores,
         "componentes_nao_disponiveis": componentes_ausentes,
