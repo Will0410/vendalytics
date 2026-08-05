@@ -48,6 +48,24 @@ def test_municipios_por_uf_lista_curitiba():
 
 
 @pytest.mark.network
+def test_pib_total_de_curitiba_e_plausivel():
+    r = ibge_real.pib_total(4106902)
+    assert r is not None
+    # PIB de Curitiba está na casa das dezenas de bilhões — checagem de
+    # sanidade ampla (a série muda todo ano e sai com ~2 anos de atraso).
+    assert 50_000_000_000 < r["pib_total_reais"] < 300_000_000_000
+    assert r["ano"] >= 2015
+
+
+@pytest.mark.network
+def test_pib_per_capita_de_curitiba_e_plausivel():
+    r = ibge_real.pib_per_capita(4106902)
+    assert r is not None
+    assert 20_000 < r["pib_per_capita_reais"] < 150_000
+    assert r["populacao"] > 1_000_000
+
+
+@pytest.mark.network
 def test_camada_para_ponto_ponta_a_ponta():
     r = ibge_real.camada_para_ponto("Curitiba", "PR")
     assert r["disponivel"] is True
@@ -71,6 +89,19 @@ def test_ibge_fora_do_ar_nao_levanta(monkeypatch):
     assert ibge_real.municipio_id("Curitiba", "PR") is None
     assert ibge_real.populacao_estimada(4106902) is None
     assert ibge_real.municipios_por_uf("PR") is None
+    assert ibge_real.pib_total(4106902) is None
+    assert ibge_real.pib_per_capita(4106902) is None
+
+
+def test_pib_per_capita_sem_pib_ou_sem_populacao_e_none(monkeypatch):
+    from vendalytics.sources import ibge_real as mod
+    monkeypatch.setattr(mod, "pib_total", lambda mid: None)
+    monkeypatch.setattr(mod, "populacao_estimada", lambda mid: {"ano": 2024, "populacao": 100})
+    assert mod.pib_per_capita(1) is None
+
+    monkeypatch.setattr(mod, "pib_total", lambda mid: {"ano": 2023, "pib_total_reais": 1000})
+    monkeypatch.setattr(mod, "populacao_estimada", lambda mid: None)
+    assert mod.pib_per_capita(1) is None
 
 
 def test_municipios_por_uf_sem_uf_nao_chama_rede(monkeypatch):

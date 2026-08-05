@@ -307,11 +307,18 @@ def territorio_municipios(uf: str, user: dict = Depends(auth.get_current_user)):
 
 @app.get("/api/territorio/municipio-info")
 def territorio_municipio_info(municipio: str, uf: str, user: dict = Depends(auth.get_current_user)):
-    """População estimada (IBGE) de 1 município — o mesmo dado que já
-    alimenta a camada sociodemográfica do simulador de Geo
-    (`ibge_real.camada_para_ponto`), exposto aqui para os KPIs do Relatório
-    de Praça sem duplicar a integração."""
-    return ibge_real.camada_para_ponto(municipio, uf)
+    """População (mesma integração do simulador de Geo) + PIB per capita
+    (novo, Contas Regionais do IBGE) de 1 município — os KPIs do Relatório
+    de Praça. PIB não entra em `camada_para_ponto` (usado por Geo a cada
+    clique no mapa) para não somar uma chamada HTTP extra a um caminho que
+    não precisa dela; aqui, sob demanda, o custo faz sentido."""
+    camada = ibge_real.camada_para_ponto(municipio, uf)
+    if not camada.get("disponivel"):
+        return camada
+    pib = ibge_real.pib_per_capita(camada["municipio_ibge_id"])
+    camada["pib_per_capita_reais"] = pib["pib_per_capita_reais"] if pib else None
+    camada["pib_ano_referencia"] = pib["pib_ano_referencia"] if pib else None
+    return camada
 
 
 @app.get("/api/territorio/prospects")

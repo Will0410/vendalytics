@@ -35,6 +35,8 @@ BASE_LOCALIDADES = "https://servicodados.ibge.gov.br/api/v1/localidades"
 BASE_AGREGADOS = "https://servicodados.ibge.gov.br/api/v3/agregados"
 AGREGADO_POPULACAO = 6579
 VARIAVEL_POPULACAO = 9324
+AGREGADO_PIB = 5938  # PIB dos Municípios (Contas Regionais, referência 2010)
+VARIAVEL_PIB_TOTAL = 37  # "Produto Interno Bruto a preços correntes", unidade Mil Reais
 
 
 def configurado() -> bool:
@@ -105,6 +107,48 @@ def populacao_estimada(municipio_ibge_id: int) -> dict | None:
     except (httpx.HTTPError, KeyError, IndexError, ValueError, StopIteration) as e:
         log.warning("IBGE indisponível (agregado população): %s", e)
         return None
+
+
+def pib_total(municipio_ibge_id: int) -> dict | None:
+    """PIB total do município (Contas Regionais, ano mais recente
+    disponível — hoje 2023, a série sai sempre com ~2 anos de defasagem, é
+    como a Contas Regionais do IBGE é publicada). `None` quando
+    indisponível, mesmo racional de `populacao_estimada`: nunca vira 0."""
+    if not configurado():
+        return None
+    try:
+        r = httpx.get(
+            f"{BASE_AGREGADOS}/{AGREGADO_PIB}/periodos/-1/variaveis/{VARIAVEL_PIB_TOTAL}",
+            params={"localidades": f"N6[{municipio_ibge_id}]"}, timeout=config.HTTP_TIMEOUT_S)
+        r.raise_for_status()
+        corpo = r.json()
+        if not corpo:
+            return None
+        series = corpo[0]["resultados"][0]["series"][0]["serie"]
+        if not series:
+            return None
+        ano, valor_mil_reais = next(iter(series.items()))
+        return {"ano": int(ano), "pib_total_reais": int(valor_mil_reais) * 1000}
+    except (httpx.HTTPError, KeyError, IndexError, ValueError, StopIteration) as e:
+        log.warning("IBGE indisponível (agregado PIB): %s", e)
+        return None
+
+
+def pib_per_capita(municipio_ibge_id: int) -> dict | None:
+    """PIB per capita = PIB total ÷ população estimada — calculado aqui a
+    partir de dois números reais do IBGE (o IBGE não publica per capita
+    municipal pronto num agregado único), nunca um valor de terceiros.
+    `None` se qualquer uma das duas partes faltar (nunca divide por dado
+    incompleto para não produzir um número que pareça preciso e não é)."""
+    pib = pib_total(municipio_ibge_id)
+    pop = populacao_estimada(municipio_ibge_id)
+    if pib is None or pop is None or not pop["populacao"]:
+        return None
+    return {
+        "pib_total_reais": pib["pib_total_reais"], "pib_ano_referencia": pib["ano"],
+        "populacao": pop["populacao"], "populacao_ano_referencia": pop["ano"],
+        "pib_per_capita_reais": round(pib["pib_total_reais"] / pop["populacao"], 2),
+    }
 
 
 def camada_para_ponto(municipio: str, uf: str) -> dict:
