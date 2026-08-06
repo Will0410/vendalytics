@@ -1,36 +1,37 @@
 :root {
-  /* Tema claro/corporativo: fundo branco/slate-50, texto slate-900, azul
-     marinho como acento único, bordas finas cinza — sem glassmorphism, sem
-     glow. Trocado a partir do tema escuro anterior por pedido explícito
-     (referência: Cortex Intelligence — fundo branco, bordas sutis). */
-  --cor-primaria: #1d4ed8;
-  --cor-secundaria: #b8863f;
-  --bg-deep: #f8fafc;
-  --bg-surface: #ffffff;
-  --bg-card: #ffffff;
-  --text-1: #0f172a;
-  --text-2: #334155;
-  --text-3: #64748b;
-  --primary-glow: rgba(29,78,216,0.12);
-  --primary-subtle: rgba(29,78,216,0.06);
-  --secondary-glow: rgba(184,134,63,0.14);
-  --secondary-subtle: rgba(184,134,63,0.07);
-  --success: #15803d;
-  --success-glow: rgba(21,128,61,0.12);
-  --warning: #b45309;
-  --danger: #b91c1c;
-  --danger-glow: rgba(185,28,28,0.12);
-  --info: #1d4ed8;
-  --info-glow: rgba(29,78,216,0.12);
-  --primary-gradient: linear-gradient(135deg, #1d4ed8, #0f172a);
-  --secondary-gradient: linear-gradient(135deg, #b8863f, #a8712f);
-  --success-gradient: linear-gradient(135deg, #15803d, #166534);
-  --glass-bg: #ffffff;
-  --glass-border: #e2e8f0;
-  --glass-blur: 0px;
-  --radius: 8px;
-  --radius-sm: 6px;
-  --radius-xs: 4px;
+  /* Tema escuro premium/tech: fundo quase preto, cards com brilho sutil na
+     borda, acento em gradiente vibrante (índigo → ciano), números grandes
+     em mono — refeito do zero a partir do pedido de algo "moderno e
+     inovador" (referências: Linear, Vercel, Raycast, produtos de IA/dado
+     atuais — e as duas telas escuras que já apareceram nesta conversa). */
+  --cor-primaria: #6366f1;
+  --cor-secundaria: #d4a15c;
+  --bg-deep: #06080f;
+  --bg-surface: #0b0f1c;
+  --bg-card: rgba(255,255,255,0.035);
+  --text-1: #f8fafc;
+  --text-2: #cbd5e1;
+  --text-3: #94a3b8;
+  --primary-glow: rgba(99,102,241,0.35);
+  --primary-subtle: rgba(99,102,241,0.1);
+  --secondary-glow: rgba(212,161,92,0.3);
+  --secondary-subtle: rgba(212,161,92,0.1);
+  --success: #10b981;
+  --success-glow: rgba(16,185,129,0.3);
+  --warning: #f59e0b;
+  --danger: #f43f5e;
+  --danger-glow: rgba(244,63,94,0.3);
+  --info: #22d3ee;
+  --info-glow: rgba(34,211,238,0.3);
+  --primary-gradient: linear-gradient(135deg, #6366f1, #06b6d4);
+  --secondary-gradient: linear-gradient(135deg, #d4a15c, #b8863f);
+  --success-gradient: linear-gradient(135deg, #10b981, #06b6d4);
+  --glass-bg: rgba(255,255,255,0.035);
+  --glass-border: rgba(255,255,255,0.09);
+  --glass-blur: 14px;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-xs: 6px;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -90,7 +91,8 @@ body {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background: var(--text-1);
+  background: #000000;
+  border-right: 1px solid var(--glass-border);
   padding: var(--space-5) var(--space-3);
   gap: var(--space-2);
 }
@@ -426,11 +428,12 @@ body {
   bottom: calc(100% + 8px);
   left: 50%;
   transform: translateX(-50%);
-  background: var(--text-1);
+  background: var(--bg-surface);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius-xs);
   padding: var(--space-2) var(--space-3);
   font-size: 11px;
-  color: #f1f5f9;
+  color: var(--text-2);
   white-space: nowrap;
   z-index: 10;
   box-shadow: 0 4px 16px rgba(15,23,42,0.2);
@@ -989,6 +992,14 @@ body {
 
 .tabela-densa th, .tabela-densa td { padding: 6px 10px; font-size: 12px; }
 .tabela-densa .mi-sub { color: var(--text-3); font-size: 11px; }
+
+.comercios-mapa-wrap {
+  margin: 0 var(--space-6) var(--space-4);
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+}
+#comercios-map { height: 50vh; min-height: 340px; background: var(--bg-surface); }
 
 .badge {
   display: inline-block;

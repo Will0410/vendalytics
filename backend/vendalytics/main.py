@@ -27,7 +27,7 @@ from .integracoes.hubspot_real import HubSpotConnector
 from .integracoes.newsapi_real import NewsAPIMentionSource
 from .integracoes.salesforce_real import SalesforceConnector
 from .integracoes.whapi_real import WhapiMessagingConnector
-from .sources import ibge_real, mercado_externo, rfb_real
+from .sources import bizdata_real, ibge_real, mercado_externo, rfb_real
 from .modules import (agente, comite, comunicacao_kpi, contactabilidade,
                       executivo, field, fila, geo, identidade, mapa, mercado,
                       metrics, mix, orquestrador, recompra, relatorio,
@@ -314,6 +314,26 @@ def territorio_visao_nacional(user: dict = Depends(auth.get_current_user)):
     if dados is None:
         raise HTTPException(502, "IBGE indisponível no momento")
     return {"estados": dados}
+
+
+@app.get("/api/territorio/comercios-categorias")
+def territorio_comercios_categorias(user: dict = Depends(auth.get_current_user)):
+    """As categorias reais que dá pra buscar (ver bizdata_real.py) — não é
+    uma lista inventada, é exatamente o que a fonte suporta."""
+    return {"categorias": bizdata_real.CATEGORIAS}
+
+
+@app.get("/api/territorio/comercios")
+def territorio_comercios(municipio: str, uf: str, categoria: str,
+                         raio_km: float = 8.0, user: dict = Depends(auth.get_current_user)):
+    """Comércios reais (nome, endereço, telefone, lat/lon) de 1 categoria
+    perto de 1 município — qualquer município do Brasil. Fonte:
+    OpenStreetMap via BizData API, com cache local (ver bizdata_real.py
+    para a postura de confiabilidade sobre essa fonte)."""
+    if categoria not in bizdata_real.CATEGORIAS:
+        raise HTTPException(400, f"categoria inválida — use uma de: {', '.join(bizdata_real.CATEGORIAS)}")
+    r = bizdata_real.buscar_com_cache(municipio, uf, categoria, raio_km=raio_km)
+    return r
 
 
 @app.get("/api/territorio/municipio-info")

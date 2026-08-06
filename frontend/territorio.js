@@ -310,3 +310,85 @@ document.getElementById("form-add-cnpj").addEventListener("submit", async (e) =>
 popularUFs();
 renderPracaKpis("", null);
 carregarProspectsIniciais();
+
+// ── Comércios reais na região (OpenStreetMap via BizData) ──────────────────
+let comerciosMap = null;
+let comerciosMarcadores = null;
+
+function inicializarComerciosMap() {
+  if (comerciosMap) return;
+  comerciosMap = L.map("comercios-map", {zoomControl: false, attributionControl: false}).setView([-14.2, -51.9], 4);
+  L.control.zoom({position: "bottomright"}).addTo(comerciosMap);
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {maxZoom: 19}).addTo(comerciosMap);
+  comerciosMarcadores = L.layerGroup().addTo(comerciosMap);
+}
+
+async function carregarCategoriasComercio() {
+  try {
+    const r = await api("/api/territorio/comercios-categorias");
+    const sel = document.getElementById("comercios-categoria");
+    sel.innerHTML = `<option value="">Selecione uma categoria</option>` +
+      r.categorias.map(c => `<option value="${c}">${c.replace(/_/g, " ")}</option>`).join("");
+  } catch (e) { console.error(e); }
+}
+
+function statusComercios(msg, tipo) {
+  const el = document.getElementById("comercios-status");
+  el.textContent = msg;
+  el.style.color = tipo === "erro" ? "var(--danger)" : "#94a3b8";
+}
+
+async function buscarComerciosReais() {
+  const municipio = document.getElementById("praca-municipio").value;
+  const uf = document.getElementById("praca-uf").value;
+  const categoria = document.getElementById("comercios-categoria").value;
+  const raio = document.getElementById("comercios-raio").value || 8;
+  const tabelaEl = document.getElementById("comercios-tabela");
+
+  if (!municipio || !uf) { statusComercios("Selecione Estado e Município no Relatório de Praça acima primeiro.", "erro"); return; }
+  if (!categoria) { statusComercios("Selecione uma categoria.", "erro"); return; }
+
+  inicializarComerciosMap();
+  statusComercios("Buscando… a 1ª consulta de um local novo pode levar alguns segundos.");
+  tabelaEl.innerHTML = skeletonTabela();
+  comerciosMarcadores.clearLayers();
+
+  try {
+    const params = new URLSearchParams({municipio, uf, categoria, raio_km: raio});
+    const r = await api(`/api/territorio/comercios?${params}`);
+    if (!r.disponivel) { statusComercios(r.motivo || "indisponível", "erro"); tabelaEl.innerHTML = ""; return; }
+
+    const comercios = r.comercios || [];
+    statusComercios(`${comercios.length} encontrados — fonte: ${r.fonte}`);
+
+    const pontos = [];
+    comercios.forEach(c => {
+      if (!c.lat || !c.lon) return;
+      const marker = L.circleMarker([c.lat, c.lon], {
+        radius: 6, fillColor: "#6366f1", fillOpacity: 0.85, color: "#fff", weight: 1,
+      });
+      marker.bindPopup(`<b>${c.name || "—"}</b><br>${c.address || ""}${c.phone ? "<br>" + c.phone : ""}`);
+      marker.addTo(comerciosMarcadores);
+      pontos.push([c.lat, c.lon]);
+    });
+    if (pontos.length) comerciosMap.fitBounds(pontos, {padding: [30, 30]});
+
+    if (!comercios.length) {
+      tabelaEl.innerHTML = `<p class="vazio">Nenhum resultado para essa categoria/raio.</p>`;
+      return;
+    }
+    tabelaEl.innerHTML = `<table class="tabela-simples tabela-densa"><thead><tr>
+        <th>Nome</th><th>Endereço</th><th>Telefone</th>
+      </tr></thead><tbody>
+        ${comercios.map(c => `<tr>
+          <td>${c.name || "—"}</td><td>${c.address || "—"}</td><td>${c.phone || "—"}</td>
+        </tr>`).join("")}
+      </tbody></table>`;
+  } catch (e) {
+    statusComercios(`Falha na busca: ${e.message}`, "erro");
+    tabelaEl.innerHTML = "";
+  }
+}
+
+document.getElementById("btn-buscar-comercios").addEventListener("click", buscarComerciosReais);
+carregarCategoriasComercio();

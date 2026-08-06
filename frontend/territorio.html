@@ -4,6 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>Território — Vendalytics</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
@@ -79,10 +80,29 @@
       </form>
     </div>
     <div id="praca-tabela"></div>
+
+    <h2 class="secao-titulo">Comércios reais na região (OpenStreetMap)</h2>
+    <p class="aviso-inline">Busca por categoria e raio ao redor do município selecionado acima —
+       nome, endereço e telefone reais, quando disponíveis. Fonte gratuita de terceiro
+       (OpenStreetMap via BizData API), sem garantia de disponibilidade tipo Google —
+       por isso os resultados ficam em cache local por até 30 dias.</p>
+
+    <div class="form-inline">
+      <select id="comercios-categoria"><option value="">Selecione uma categoria</option></select>
+      <input type="number" id="comercios-raio" value="8" min="1" max="50" style="width:70px" title="raio em km"/>
+      <button id="btn-buscar-comercios">Buscar</button>
+      <span id="comercios-status" class="aviso-inline" style="padding:0"></span>
+    </div>
+
+    <div class="comercios-mapa-wrap">
+      <div id="comercios-map"></div>
+    </div>
+    <div id="comercios-tabela"></div>
   </section>
 </main>
 </div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="branding.js"></script>
 <script src="api.js"></script>
 <script src="territorio.js"></script>
