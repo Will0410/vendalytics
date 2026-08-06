@@ -9,7 +9,7 @@ const brl = (v) => "R$ " + Number(v || 0).toLocaleString("pt-BR", {maximumFracti
 
 const map = L.map("geo-map", {zoomControl: false, attributionControl: false}).setView([-24.9, -53.5], 7);
 L.control.zoom({position: "bottomright"}).addTo(map);
-L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {maxZoom: 19}).addTo(map);
+L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {maxZoom: 19}).addTo(map);
 
 let marcador = null, circuloRaio = null;
 const RAIO_KM = 3;

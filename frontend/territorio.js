@@ -319,7 +319,7 @@ function inicializarComerciosMap() {
   if (comerciosMap) return;
   comerciosMap = L.map("comercios-map", {zoomControl: false, attributionControl: false}).setView([-14.2, -51.9], 4);
   L.control.zoom({position: "bottomright"}).addTo(comerciosMap);
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {maxZoom: 19}).addTo(comerciosMap);
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {maxZoom: 19}).addTo(comerciosMap);
   comerciosMarcadores = L.layerGroup().addTo(comerciosMap);
 }
 
