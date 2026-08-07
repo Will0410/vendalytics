@@ -12,6 +12,8 @@ import { useBackdrop } from "../assets/AssetProvider";
 import type { AssetId } from "../assets/catalog";
 import type { Insight } from "../domain/insights";
 import type { Metrica } from "../domain/territorio";
+import type { PontoSerie, Tendencia } from "../domain/crescimento";
+import { Ancora, SeloTendencia, Sparkline } from "./microvis";
 import { Badge, Card, Faixa, Figura, Row, Skeleton, Stack, Text } from "./primitives";
 import { Procedencia } from "./estados";
 
@@ -33,6 +35,13 @@ export function CardKpi({
   destaque,
   carregando,
   nota,
+  serie,
+  tendencia,
+  detalheTendencia,
+  percentil,
+  posicao,
+  totalUniverso,
+  universo,
 }: {
   rotulo: string;
   /** Já formatado. O card não formata — quem sabe a unidade é o módulo. */
@@ -44,6 +53,16 @@ export function CardKpi({
   destaque?: boolean;
   carregando?: boolean;
   nota?: string;
+  /** Série anual — vira sparkline ao lado do número. */
+  serie?: PontoSerie[];
+  tendencia?: Tendencia;
+  detalheTendencia?: string;
+  /** 0–100. Responde "isso é muito?", que o valor absoluto sozinho não responde. */
+  percentil?: number | null;
+  posicao?: number | null;
+  totalUniverso?: number | null;
+  /** Contra quem o percentil compara — "645 municípios de SP". */
+  universo?: string;
 }) {
   /* A textura só cobre o card com opacidade baixa: precisa ler como
      acabamento, não competir com o número. */
@@ -67,27 +86,47 @@ export function CardKpi({
         <Text size="xs" overline>
           {rotulo}
         </Text>
-        <Row gap={2} align="baseline" wrap>
-          <Figura size={destaque ? "xl" : "lg"} tone={destaque ? "accent" : "primary"}>
-            {valor}
-          </Figura>
-          {sufixo}
+
+        <Row gap={3} justify="between" align="end">
+          <Row gap={2} align="baseline" wrap css={{ minWidth: 0 }}>
+            <Figura size={destaque ? "xl" : "lg"} tone={destaque ? "accent" : "primary"}>
+              {valor}
+            </Figura>
+            {sufixo}
+          </Row>
+          {/* A tendência fica colada no número: é a mesma informação vista no
+              tempo, não um dado à parte. */}
+          <Sparkline serie={serie} titulo={detalheTendencia} />
         </Row>
-        {nota && (
-          <Text size="sm" tone="secondary">
-            {nota}
-          </Text>
+
+        {(nota || tendencia) && (
+          <Row gap={2} align="center" wrap>
+            {tendencia && <SeloTendencia tendencia={tendencia} detalhe={detalheTendencia} />}
+            {nota && (
+              <Text size="sm" tone="secondary">
+                {nota}
+              </Text>
+            )}
+          </Row>
         )}
       </Stack>
 
-      {metrica && (
-        <div style={{ marginTop: 12 }}>
+      <Stack gap={3} css={{ marginTop: "$3" }}>
+        {percentil != null && universo && (
+          <Ancora
+            percentil={percentil}
+            posicao={posicao ?? null}
+            total={totalUniverso ?? null}
+            universo={universo}
+          />
+        )}
+        {metrica && (
           <Procedencia
             tipo={metrica.procedencia}
             fonte={metrica.ano ? `${metrica.fonte} · ${metrica.ano}` : metrica.fonte}
           />
-        </div>
-      )}
+        )}
+      </Stack>
     </CorpoKpi>
   );
 }

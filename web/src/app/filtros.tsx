@@ -136,12 +136,51 @@ function escreverNaUrl(f: Filtros): void {
   }
 }
 
+/** Compara sem depender da ordem das seções — `["G","C"]` e `["C","G"]` são o
+ *  mesmo recorte, e tratá-los como diferentes causaria um render a cada
+ *  `hashchange`. */
+function iguais(a: Filtros, b: Filtros): boolean {
+  return (
+    a.uf === b.uf &&
+    a.municipioId === b.municipioId &&
+    a.ticketMedioAnual === b.ticketMedioAnual &&
+    a.shareAlvo === b.shareAlvo &&
+    a.risco === b.risco &&
+    a.secoes.length === b.secoes.length &&
+    [...a.secoes].sort().join() === [...b.secoes].sort().join()
+  );
+}
+
 export function ProvedorFiltros({ children }: { children: ReactNode }) {
   const [filtros, setFiltros] = useState<Filtros>(() => ({ ...PADRAO, ...lerDaUrl() }));
 
   useEffect(() => {
     escreverNaUrl(filtros);
   }, [filtros]);
+
+  /**
+   * Relê os filtros quando a URL muda POR FORA — e isso acontece mais do que
+   * parece: colar um link numa aba já aberta, usar voltar/avançar do
+   * navegador, ou trocar de módulo (que reescreve o hash preservando a query).
+   *
+   * Sem este listener, o estado era lido uma vez só, na montagem. Trocar de
+   * hash não remonta nada, então um link com `?uf=SP&mun=3550308` abria a tela
+   * certa com o filtro errado — o Relatório de Praça mostrava "escolha uma
+   * praça" mesmo com o município na URL. Deep link que só funciona em carga
+   * limpa não é deep link.
+   *
+   * Não há laço: o efeito acima grava com `replaceState`, que não dispara
+   * `hashchange`; e quando dispara (troca de módulo), a comparação abaixo
+   * descarta o valor idêntico antes de mexer no estado.
+   */
+  useEffect(() => {
+    const aoMudar = () => {
+      const daUrl = { ...PADRAO, ...lerDaUrl() };
+      setFiltros((atual) => (iguais(atual, daUrl) ? atual : daUrl));
+    };
+    window.addEventListener("hashchange", aoMudar);
+    return () => window.removeEventListener("hashchange", aoMudar);
+  }, []);
 
   const definir = useCallback(<K extends keyof Filtros>(chave: K, valor: Filtros[K]) => {
     setFiltros((f) => {

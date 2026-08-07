@@ -81,6 +81,9 @@ export interface Municipio {
 export interface Medida {
   valor: number;
   ano: number;
+  /** Série completa quando o agregado foi pedido com `periodos/all`.
+   *  Ordenada do ano mais antigo para o mais novo. */
+  serie?: { ano: number; valor: number }[];
 }
 
 export interface MetricasLocalidade {
@@ -113,12 +116,25 @@ interface RespostaAgregado {
 const SUPRIMIDO = new Set(["-", "..", "...", "X", "..X", ""]);
 
 function medidaDaSerie(s: Serie): Medida | null {
-  const entradas = Object.entries(s.serie ?? {});
-  if (entradas.length === 0) return null;
-  const [ano, bruto] = entradas[entradas.length - 1] as [string, string];
-  if (bruto == null || SUPRIMIDO.has(String(bruto).trim())) return null;
-  const valor = Number(bruto);
-  return Number.isFinite(valor) ? { valor, ano: Number(ano) } : null;
+  /* Ordena por ano em vez de confiar na ordem do JSON: com `periodos/all` a
+     API devolve vários anos, e a leitura "o mais recente é o último" só é
+     verdade por acidente de serialização. */
+  const pontos = Object.entries(s.serie ?? {})
+    .map(([ano, bruto]) => ({ ano: Number(ano), bruto }))
+    .filter((p) => Number.isFinite(p.ano))
+    .sort((a, b) => a.ano - b.ano);
+
+  const validos = pontos
+    .filter((p) => p.bruto != null && !SUPRIMIDO.has(String(p.bruto).trim()))
+    .map((p) => ({ ano: p.ano, valor: Number(p.bruto) }))
+    .filter((p) => Number.isFinite(p.valor));
+
+  const ultimo = validos[validos.length - 1];
+  if (!ultimo) return null;
+
+  return validos.length > 1
+    ? { valor: ultimo.valor, ano: ultimo.ano, serie: validos }
+    : { valor: ultimo.valor, ano: ultimo.ano };
 }
 
 /** Achata um `resultado` em `id da localidade → medida`. */
@@ -133,15 +149,24 @@ function porLocalidade(resultado: Resultado | undefined): Map<number, Medida> {
   return saida;
 }
 
+/**
+ * `periodo` é `-1` (só o ano mais recente) ou `all` (a série inteira).
+ *
+ * A série custa pouco e vale muito: medido, 818KB contra 678KB para o mesmo
+ * recorte municipal — 20% a mais de payload para três anos em vez de um. É o
+ * que separa "existem X empresas aqui" de "e esse número está subindo ou
+ * caindo", que é a pergunta comercial de verdade.
+ */
 function urlAgregado(
   agregado: number,
   variavel: number,
   nivel: string,
   classificacao?: string,
+  periodo: "-1" | "all" = "-1",
 ): string {
   const p = new URLSearchParams({ localidades: nivel });
   if (classificacao) p.set("classificacao", classificacao);
-  return `${AGREGADOS}/${agregado}/periodos/-1/variaveis/${variavel}?${p}`;
+  return `${AGREGADOS}/${agregado}/periodos/${periodo}/variaveis/${variavel}?${p}`;
 }
 
 /* ─── Malha político-administrativa ────────────────────────────────────── */
@@ -319,6 +344,8 @@ export interface SetorLocalidade {
   secao: string;
   empresas: number;
   ano: number;
+  /** Série anual, quando pedida — alimenta crescimento e sparkline. */
+  serie?: { ano: number; valor: number }[];
 }
 
 /** Lê um resultado por categoria (uma entrada por seção pedida). */
@@ -339,7 +366,7 @@ function porSecao(
       const m = medidaDaSerie(s);
       if (!m) continue;
       const lista = saida.get(localidade) ?? [];
-      lista.push({ secao, empresas: m.valor, ano: m.ano });
+      lista.push({ secao, empresas: m.valor, ano: m.ano, serie: m.serie });
       saida.set(localidade, lista);
     }
   }
@@ -366,6 +393,7 @@ export function setoresPorUf(): Promise<Map<number, SetorLocalidade[]>> {
           VARIAVEL_EMPRESAS,
           "N3[all]",
           `${CLASSIFICACAO_CNAE}[${IDS_TODAS_SECOES}]`,
+          "all",
         ),
         { timeoutMs: 30_000 },
       );
@@ -390,6 +418,7 @@ export function setoresDoBrasil(): Promise<SetorLocalidade[]> {
           VARIAVEL_EMPRESAS,
           "N1[all]",
           `${CLASSIFICACAO_CNAE}[${IDS_TODAS_SECOES}]`,
+          "all",
         ),
         {},
       );
@@ -439,8 +468,9 @@ export function municipiosDoSetor(secao: string): Promise<MetricasLocalidade[]> 
           VARIAVEL_EMPRESAS,
           "N6[all]",
           `${CLASSIFICACAO_CNAE}[${categoria}]`,
+          "all",
         ),
-        { timeoutMs: 45_000 },
+        { timeoutMs: 60_000 },
       );
 
       const saida: MetricasLocalidade[] = [];

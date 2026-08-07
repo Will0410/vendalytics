@@ -45,8 +45,9 @@ export interface PontoMapa {
   lon: number;
   /** Valor que dimensiona a bolinha (nº de empresas do setor). */
   valor: number;
-  /** Índice de saturação; 1,0 = mediana da UF. `null` colore em cinza. */
-  saturacao: number | null;
+  /** Cor já resolvida pelo módulo. O mapa desenha, não interpreta — assim
+   *  trocar a escala (saturação ↔ atratividade) não toca nesta camada. */
+  cor: string;
   /** Linhas exibidas no popup, na ordem. */
   detalhes: { rotulo: string; valor: string }[];
   classificacao: string;
@@ -74,6 +75,24 @@ export function corDeSaturacao(indice: number | null): string {
   }
   const t = Math.min(1, Math.max(0, (indice - 1) / 0.5));
   return misturar(NEUTRO, QUENTE, t);
+}
+
+/**
+ * Score de Atratividade (0–100) → cor.
+ *
+ * Aqui a escala é SEQUENCIAL, não divergente, e a diferença não é estética: o
+ * score não tem ponto médio com significado — 50 não é "neutro", é só metade
+ * do caminho. Usar divergente inventaria um eixo que o dado não tem.
+ *
+ * Um só matiz, do escuro (baixa) ao claro (alta), sobre o fundo escuro do
+ * mapa: mais atrativo lê como mais luminoso, que é a direção intuitiva.
+ */
+const ATRAT_BAIXA = [24, 47, 92] as const; // azul quase apagado
+const ATRAT_ALTA = [34, 211, 238] as const; // ciano da marca
+
+export function corDeAtratividade(score: number | null): string {
+  if (score == null || !Number.isFinite(score)) return SEM_DADO;
+  return misturar(ATRAT_BAIXA, ATRAT_ALTA, Math.min(1, Math.max(0, score / 100)));
 }
 
 /* ─── Raio ─────────────────────────────────────────────────────────────── */
@@ -108,7 +127,7 @@ function htmlDoPopup(p: PontoMapa): string {
     <div class="va-cab">
       <span class="va-mun">${esc(p.nome)}</span><span class="va-uf">${esc(p.uf)}</span>
     </div>
-    <div class="va-classe" style="color:${corDeSaturacao(p.saturacao)}">${esc(p.classificacao)}</div>
+    <div class="va-classe" style="color:${p.cor}">${esc(p.classificacao)}</div>
     <div class="va-linhas">${linhas}</div>
     <button class="va-btn" data-municipio="${p.id}">Abrir Relatório de Praça</button>
   </div>`;
@@ -323,7 +342,7 @@ export function MapaBrasil({
     for (const p of pontos) {
       const marcador = L.circleMarker([p.lat, p.lon], {
         radius: raioDe(p.valor, maximo),
-        fillColor: corDeSaturacao(p.saturacao),
+        fillColor: p.cor,
         fillOpacity: 0.68,
         /* Anel na cor do fundo: bolinhas sobrepostas continuam contáveis em
            vez de virarem uma mancha só. */
