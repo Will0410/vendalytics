@@ -1,3 +1,22 @@
+# ── Banco operacional ────────────────────────────────────────────────────────
+#
+# Existe por um motivo específico: o disco do plano free do Render é EFÊMERO.
+# Com o banco em SQLite no disco do serviço, TODO deploy apagava a tabela de
+# usuários — o admin era recriado com senha aleatória impressa uma única vez no
+# log, e quem estava dentro perdia o acesso na publicação seguinte. Já tinha
+# acontecido antes neste projeto (ver o comentário em config.py sobre o disco
+# efêmero).
+#
+# `infra/db.py` já suportava Postgres, com uma lista de migrations própria
+# (AUTOINCREMENT → GENERATED ALWAYS AS IDENTITY) e um wrapper que traduz os
+# placeholders `?` para `%s`. Faltava só provisionar o banco e apontar a
+# variável — é o que estas duas declarações fazem.
+databases:
+  - name: vendalytics-db
+    plan: free
+    databaseName: vendalytics
+    user: vendalytics
+
 services:
   - type: web
     name: vendalytics
@@ -31,6 +50,15 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.8
+
+      # Sem esta variável o banco volta a ser SQLite no disco efêmero, e os
+      # usuários somem no próximo deploy. O Render preenche sozinho a partir
+      # do banco declarado acima — nenhum valor de conexão entra no repositório.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: vendalytics-db
+          property: connectionString
+
       - key: JWT_SECRET
         generateValue: true
       - key: VENDALYTICS_ADAPTER

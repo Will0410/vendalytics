@@ -35,6 +35,29 @@ os.environ["VENDALYTICS_SQLITE_PATH"] = str(_TMP / "dados.sqlite")
 os.environ["VENDALYTICS_CRM_STAGING"] = str(_TMP / "crm_staging")
 os.environ["DEMO_MODE"] = "false"
 
+# Credenciais dos conectores opcionais: zeradas de propósito.
+#
+# `config.py` faz `load_dotenv(override=False)`, então tudo que estiver no
+# `.env` da máquina entra no processo de teste. Vários testes desta suíte
+# afirmam justamente o CONTRÁRIO — "nenhum conector real configurado por
+# padrão", "sem GROQ o relatório é estrutural" — e passavam ou falhavam
+# conforme o `.env` de quem rodava. Numa máquina com GROQ_API_KEY real, seis
+# testes falhavam sem nenhuma relação com o código.
+#
+# Setar a chave como string vazia AQUI, antes do import, bloqueia o
+# `load_dotenv` (que só preenche o que ainda não existe no ambiente). Testes
+# que precisam de um conector ligado continuam fazendo `monkeypatch.setattr`
+# explícito — que é como a intenção deve aparecer, no próprio teste.
+for _credencial in (
+    "GROQ_API_KEY",
+    "WHAPI_TOKEN", "WHAPI_WEBHOOK_SECRET",
+    "SALESFORCE_CLIENT_ID", "SALESFORCE_CLIENT_SECRET",
+    "SALESFORCE_USERNAME", "SALESFORCE_PASSWORD", "SALESFORCE_SECURITY_TOKEN",
+    "HUBSPOT_ACCESS_TOKEN",
+    "NEWSAPI_KEY",
+):
+    os.environ[_credencial] = ""
+
 from vendalytics import auth, config, data_layer  # noqa: E402
 from vendalytics.adapters.sqlite_reference import SCHEMA  # noqa: E402
 from vendalytics.infra import context, db  # noqa: E402
