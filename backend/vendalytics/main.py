@@ -28,10 +28,11 @@ from .integracoes.newsapi_real import NewsAPIMentionSource
 from .integracoes.salesforce_real import SalesforceConnector
 from .integracoes.whapi_real import WhapiMessagingConnector
 from .sources import bizdata_real, ibge_real, mercado_externo, rfb_real
-from .modules import (agente, comite, comunicacao_kpi, contactabilidade,
-                      executivo, field, fila, geo, identidade, mapa, mercado,
-                      metrics, mix, orquestrador, recompra, relatorio,
-                      reputacao, semantico, territorio)
+from .modules import (agente, analise_ia, comite, comunicacao_kpi,
+                      contactabilidade, executivo, field, fila, geo,
+                      identidade, mapa, mercado, metrics, mix, orquestrador,
+                      recompra, relatorio, reputacao, semantico, territorio,
+                      usuarios)
 
 telemetry.configurar_logging(logging.INFO, json_logs=not config.DEMO_MODE)
 log = logging.getLogger("vendalytics")
@@ -187,6 +188,91 @@ def login(body: LoginReq):
 @app.get("/api/auth/me")
 def me(user: dict = Depends(auth.get_current_user)):
     return user
+
+
+# ── gestão de contas de acesso ─────────────────────────────────────────
+# Até aqui, criar o 2º usuário da instalação exigia shell no servidor
+# (`auth.criar_usuario` só existia como função Python). Estes endpoints são a
+# superfície que faltava; as regras — último admin, autorremoção, senha
+# mínima — vivem em `modules/usuarios.py`, não aqui.
+class CriarUsuarioReq(BaseModel):
+    email: str
+    senha: str
+    nome: str
+    role: str = "user"
+    filiais: list[str] = []
+
+
+class RedefinirSenhaReq(BaseModel):
+    senha: str
+
+
+class TrocarSenhaReq(BaseModel):
+    senha_atual: str
+    senha_nova: str
+
+
+class PapelReq(BaseModel):
+    role: str
+
+
+@app.get("/api/usuarios")
+def usuarios_listar(user: dict = Depends(auth.require_admin)):
+    return {"usuarios": usuarios.listar()}
+
+
+@app.post("/api/usuarios", status_code=201)
+def usuarios_criar(body: CriarUsuarioReq, user: dict = Depends(auth.require_admin)):
+    return usuarios.criar(email=body.email, senha=body.senha, nome=body.nome,
+                          role=body.role, filiais=body.filiais)
+
+
+@app.post("/api/usuarios/senha")
+def usuarios_trocar_propria_senha(body: TrocarSenhaReq,
+                                  user: dict = Depends(auth.get_current_user)):
+    """Troca da própria senha — exige a senha atual, por isso NÃO é
+    `require_admin`: todo usuário pode (e deve) trocar a sua."""
+    return usuarios.trocar_propria_senha(email=user["email"],
+                                         senha_atual=body.senha_atual,
+                                         senha_nova=body.senha_nova)
+
+
+@app.put("/api/usuarios/{email}/senha")
+def usuarios_redefinir_senha(email: str, body: RedefinirSenhaReq,
+                             user: dict = Depends(auth.require_admin)):
+    return usuarios.redefinir_senha(email=email, senha=body.senha, por=user["email"])
+
+
+@app.put("/api/usuarios/{email}/papel")
+def usuarios_alterar_papel(email: str, body: PapelReq,
+                           user: dict = Depends(auth.require_admin)):
+    return usuarios.alterar_papel(email=email, role=body.role, por=user["email"])
+
+
+@app.delete("/api/usuarios/{email}")
+def usuarios_remover(email: str, user: dict = Depends(auth.require_admin)):
+    return usuarios.remover(email=email, por=user["email"])
+
+
+# ── análise por IA (grounded) ──────────────────────────────────────────
+class AnaliseIAReq(BaseModel):
+    contexto: str
+    fatos: dict
+
+
+@app.post("/api/ia/analisar")
+def ia_analisar(body: AnaliseIAReq, user: dict = Depends(auth.get_current_user)):
+    """Redige a leitura executiva sobre fatos JÁ CALCULADOS pelo cliente.
+
+    Autenticado de propósito: a chave da Groq mora neste processo, e um proxy
+    de LLM aberto na internet gastaria a cota do dono da instalação.
+    """
+    return analise_ia.analisar(contexto=body.contexto, fatos=body.fatos)
+
+
+@app.get("/api/ia/status")
+def ia_status(user: dict = Depends(auth.get_current_user)):
+    return {"disponivel": analise_ia.disponivel(), "modelo": config.GROQ_MODEL}
 
 
 # ── identidade/branding do tenant ───────────────────────────────────────
