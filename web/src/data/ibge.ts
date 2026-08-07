@@ -371,7 +371,11 @@ export function setoresPorUf(): Promise<Map<number, SetorLocalidade[]>> {
       );
       return porSecao(corpo?.[0]?.resultados, ID_PARA_SECAO);
     },
-    { ttlMs: 6 * 3600 * 1000 },
+    /* `persistir: false` porque o retorno é um `Map`, e Map não sobrevive ao
+       JSON do sessionStorage — vira `{}` e quebra o `for...of` de quem
+       consome. O guarda em `lib/cache.ts` também barra isso, mas a intenção
+       fica declarada aqui, no lugar onde a decisão é tomada. */
+    { ttlMs: 6 * 3600 * 1000, persistir: false },
   );
 }
 

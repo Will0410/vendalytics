@@ -56,7 +56,41 @@ function lerSessao<T>(chave: string): Entrada<T> | null {
   }
 }
 
+/**
+ * `true` quando o valor NÃO sobrevive a um `JSON.stringify` → `JSON.parse`.
+ *
+ * Existe por causa de um bug que chegou em produção: `setoresPorUf()` devolve
+ * um `Map`, o cache persistia isso em sessionStorage, e `JSON.stringify(new
+ * Map(...))` produz `{}`. Na primeira visita tudo funcionava (valor vindo da
+ * memória); no F5 a tela morria com "dado is not iterable", porque o Map
+ * tinha virado um objeto vazio no caminho.
+ *
+ * O modo de falha é o pior possível: silencioso, só no segundo carregamento, e
+ * some quando se abre o navegador limpo para investigar. Por isso a checagem
+ * mora aqui, e não numa lembrança de quem escreve o próximo `comCache`.
+ *
+ * Verifica o topo e um nível de profundidade — cobre tanto `Map` puro quanto
+ * `{ lista, indice: Map }`, que são as duas formas que aparecem neste código.
+ */
+function perdeNaSerializacao(valor: unknown): boolean {
+  const suspeito = (v: unknown) => v instanceof Map || v instanceof Set;
+  if (suspeito(valor)) return true;
+  if (valor && typeof valor === "object" && !Array.isArray(valor)) {
+    return Object.values(valor as Record<string, unknown>).some(suspeito);
+  }
+  return false;
+}
+
 function gravarSessao<T>(chave: string, entrada: Entrada<T>): void {
+  if (perdeNaSerializacao(entrada.valor)) {
+    if (import.meta.env.DEV) {
+      console.warn(
+        `[cache] "${chave}" contém Map/Set e não sobrevive ao sessionStorage — ` +
+          `mantido só em memória. Use { persistir: false } para deixar isso explícito.`,
+      );
+    }
+    return;
+  }
   try {
     sessionStorage.setItem(PREFIXO + chave, JSON.stringify(entrada));
   } catch {

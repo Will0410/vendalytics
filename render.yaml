@@ -11,10 +11,20 @@ services:
     # `web/dist` que está versionado no repositório. Sem esse fallback, uma
     # ausência de Node derrubaria o serviço inteiro em vez de publicar a
     # interface da última vez que alguém rodou `npm run build`.
+    # Cada caminho imprime uma linha própria no log: sem isso, descobrir se o
+    # front foi reconstruído no Render ou se veio do `web/dist` versionado
+    # exige adivinhar pelo hash do arquivo servido.
     buildCommand: >-
       pip install -r requirements.txt &&
-      (cd web && npm ci --no-audit --no-fund && npm run build
-       || echo "AVISO: build do front falhou — usando o web/dist versionado")
+      ( cd web &&
+        if command -v npm >/dev/null 2>&1; then
+          echo "[front] npm $(npm -v) / node $(node -v) — reconstruindo" &&
+          npm ci --no-audit --no-fund && npm run build &&
+          echo "[front] OK: bundle reconstruído no Render";
+        else
+          echo "[front] Node ausente na imagem — publicando o web/dist versionado";
+        fi
+      ) || echo "[front] FALHOU o build — publicando o web/dist versionado"
 
     startCommand: cd backend && uvicorn vendalytics.main:app --host 0.0.0.0 --port $PORT
 
