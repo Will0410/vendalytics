@@ -67,6 +67,17 @@ export const ASSETS = {
     height: 24,
     alt: "",
   }),
+  "icon.mapa": spec({
+    id: "icon.mapa",
+    kind: "icon",
+    prompt:
+      "Ícone de linha para 'Mapa Territorial': mapa dobrado em perspectiva com " +
+      "pontos de dados de tamanhos diferentes distribuídos sobre ele. Traço " +
+      "1.5px, cantos arredondados, monocromático, grade 24x24, estilo enterprise.",
+    width: 24,
+    height: 24,
+    alt: "",
+  }),
   "icon.praca": spec({
     id: "icon.praca",
     kind: "icon",

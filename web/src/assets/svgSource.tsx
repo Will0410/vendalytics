@@ -97,6 +97,21 @@ function IconGeomarketing(): ReactNode {
   );
 }
 
+function IconMapa(): ReactNode {
+  return (
+    <svg {...iconProps}>
+      {/* Mapa dobrado em três painéis */}
+      <path d="M9 3.4 3 5.6v15l6-2.2 6 2.2 6-2.2v-15L15 5.6 9 3.4Z" />
+      <path d="M9 3.4v15M15 5.6v15" opacity="0.45" />
+      {/* Bolinhas de tamanhos diferentes — a metáfora do próprio módulo */}
+      <circle cx="6.1" cy="10.4" r="1" fill="currentColor" stroke="none" opacity="0.65" />
+      <circle cx="12" cy="9.2" r="2" fill="currentColor" stroke="none" />
+      <circle cx="18" cy="13.4" r="1.4" fill="currentColor" stroke="none" opacity="0.8" />
+      <circle cx="11.4" cy="15.4" r="0.85" fill="currentColor" stroke="none" opacity="0.5" />
+    </svg>
+  );
+}
+
 function IconPraca(): ReactNode {
   return (
     <svg {...iconProps}>
@@ -308,6 +323,7 @@ const NODES: Partial<Record<AssetId, () => ReactNode>> = {
   "logo.mark": LogoMark,
   "icon.vendas": IconVendas,
   "icon.geomarketing": IconGeomarketing,
+  "icon.mapa": IconMapa,
   "icon.praca": IconPraca,
   "icon.prospeccao": IconProspeccao,
   "icon.usuarios": IconUsuarios,

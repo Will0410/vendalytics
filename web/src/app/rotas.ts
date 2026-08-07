@@ -16,6 +16,7 @@ import type { AssetId } from "../assets/catalog";
 export type RotaId =
   | "vendas"
   | "geomarketing"
+  | "mapa"
   | "praca"
   | "prospeccao"
   | "enriquecimento"
@@ -42,6 +43,12 @@ export const ROTAS: readonly DefinicaoRota[] = [
     titulo: "Geomarketing",
     descricao: "Onde estão as empresas do seu setor, município a município",
     icone: "icon.geomarketing",
+  },
+  {
+    id: "mapa",
+    titulo: "Mapa Territorial",
+    descricao: "Os 5.570 municípios do Brasil no mapa — uma bolinha por praça",
+    icone: "icon.mapa",
   },
   {
     id: "praca",

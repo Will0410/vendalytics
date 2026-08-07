@@ -6,7 +6,7 @@
  * navegação e os filtros continuam de pé, e o usuário troca de módulo em vez
  * de dar F5.
  */
-import { Component, Suspense, type ErrorInfo, type ReactNode } from "react";
+import { Component, Suspense, lazy, type ErrorInfo, type ReactNode } from "react";
 import { styled } from "./stitches.config";
 import { Header } from "./components/Header";
 import { Sidebar } from "./components/Sidebar";
@@ -23,6 +23,18 @@ import { RelatorioPraca } from "./modules/RelatorioPraca";
 import { Prospeccao } from "./modules/Prospeccao";
 import { Enriquecimento } from "./modules/Enriquecimento";
 import { Usuarios } from "./modules/Usuarios";
+
+/**
+ * O Mapa Territorial entra por import dinâmico.
+ *
+ * Ele arrasta Leaflet + markercluster + os 161KB de centroides — sozinho,
+ * dobrava o bundle inicial. Seis dos sete módulos não desenham mapa nenhum, e
+ * quem abre o painel de Vendas não deveria pagar por isso. O `<Suspense>` que
+ * já envolve o conteúdo cuida do estado de carregamento.
+ */
+const MapaTerritorial = lazy(() =>
+  import("./modules/MapaTerritorial").then((m) => ({ default: m.MapaTerritorial })),
+);
 
 const Shell = styled("div", {
   display: "grid",
@@ -144,6 +156,7 @@ export default function App() {
             <Suspense fallback={<SkeletonKpis />}>
               {rotaEfetiva === "vendas" && <InteligenciaVendas />}
               {rotaEfetiva === "geomarketing" && <Geomarketing />}
+              {rotaEfetiva === "mapa" && <MapaTerritorial />}
               {rotaEfetiva === "praca" && <RelatorioPraca />}
               {rotaEfetiva === "prospeccao" && <Prospeccao />}
               {rotaEfetiva === "enriquecimento" && <Enriquecimento />}
