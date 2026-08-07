@@ -11,7 +11,7 @@
  * ao JSON`.
  */
 import { describe, expect, it, vi } from "vitest";
-import { comCache, limparCache } from "./cache";
+import { comCache, limparCache, limparMemoria } from "./cache";
 
 describe("comCache", () => {
   it("executa o produtor uma vez e reusa o valor dentro do TTL", async () => {
@@ -119,6 +119,57 @@ describe("comCache", () => {
       const naoDeveriaRodar = vi.fn(async () => ({ municipios: [], total: 0 }));
       expect(await comCache("roundtrip", naoDeveriaRodar)).toEqual(original);
       expect(naoDeveriaRodar).not.toHaveBeenCalled();
+    });
+  });
+
+  /* ── Camada durável (IndexedDB) ─────────────────────────────────────────
+     Existe para o que o sessionStorage não aceita: ~2,5MB com um Map dentro.
+     Sem ela, todo F5 refazia a carga nacional inteira do IBGE. */
+  describe("persistência durável", () => {
+    it("guarda e devolve um Map intacto", async () => {
+      /* É o caso que quebrava no sessionStorage. IndexedDB usa clonagem
+         estruturada — o Map atravessa como Map, não como `{}`. */
+      const produtor = vi.fn(async () => new Map([[35, ["G", "C"]]]));
+
+      const ida = await comCache("dur:mapa", produtor, { duravel: true });
+      expect(ida.get(35)).toEqual(["G", "C"]);
+
+      limparMemoria();
+      const volta = await comCache<Map<number, string[]>>(
+        "dur:mapa",
+        vi.fn(),
+        { duravel: true },
+      );
+
+      expect(volta).toBeInstanceOf(Map);
+      expect(volta.get(35)).toEqual(["G", "C"]);
+      expect(produtor).toHaveBeenCalledTimes(1);
+    });
+
+    it("respeita o TTL", async () => {
+      const produtor = vi.fn(async () => "v1");
+      await comCache("dur:ttl", produtor, { duravel: true, ttlMs: 5 });
+
+      limparMemoria();
+      await new Promise((r) => setTimeout(r, 25));
+
+      const outro = vi.fn(async () => "v2");
+      expect(await comCache("dur:ttl", outro, { duravel: true, ttlMs: 5 })).toBe("v2");
+    });
+
+    it("funciona sem IndexedDB — degrada, não quebra", async () => {
+      /* Navegação anônima, política corporativa, cota cheia. Cache que
+         derruba a aplicação quando falha não é cache, é dependência. */
+      const original = globalThis.indexedDB;
+      // @ts-expect-error — remoção deliberada para simular indisponibilidade
+      delete globalThis.indexedDB;
+
+      try {
+        const produtor = vi.fn(async () => ({ ok: true }));
+        expect(await comCache("dur:sem-idb", produtor, { duravel: true })).toEqual({ ok: true });
+      } finally {
+        globalThis.indexedDB = original;
+      }
     });
   });
 });

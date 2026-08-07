@@ -283,7 +283,7 @@ export function cargaNacional(): Promise<CargaNacional> {
       municipios.sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
       return { municipios, porId: new Map(municipios.map((m) => [m.id, m])) };
     },
-    { ttlMs: 6 * 3600 * 1000, persistir: false },
+    { ttlMs: 7 * 24 * 3600 * 1000, duravel: true },
   );
 }
 
@@ -403,7 +403,7 @@ export function setoresPorUf(): Promise<Map<number, SetorLocalidade[]>> {
        JSON do sessionStorage — vira `{}` e quebra o `for...of` de quem
        consome. O guarda em `lib/cache.ts` também barra isso, mas a intenção
        fica declarada aqui, no lugar onde a decisão é tomada. */
-    { ttlMs: 6 * 3600 * 1000, persistir: false },
+    { ttlMs: 7 * 24 * 3600 * 1000, duravel: true },
   );
 }
 
@@ -489,7 +489,7 @@ export function municipiosDoSetor(secao: string): Promise<MetricasLocalidade[]> 
       }
       return saida.sort((a, b) => (b.empresas?.valor ?? 0) - (a.empresas?.valor ?? 0));
     },
-    { ttlMs: 6 * 3600 * 1000, persistir: false },
+    { ttlMs: 7 * 24 * 3600 * 1000, duravel: true },
   );
 }
 
@@ -533,7 +533,7 @@ export function serieDoSetor(secao: string): Promise<Map<number, { ano: number; 
       return saida;
     },
     /* Map não sobrevive ao JSON do sessionStorage — ver a regra em lib/cache.ts. */
-    { ttlMs: 6 * 3600 * 1000, persistir: false },
+    { ttlMs: 7 * 24 * 3600 * 1000, duravel: true },
   );
 }
 

@@ -30,6 +30,8 @@
  * dado público que outra tela vai pedir em seguida, é melhor que jogar fora.
  */
 
+import * as armazem from "./armazem";
+
 interface Entrada<T> {
   valor: T;
   expiraEm: number;
@@ -104,6 +106,19 @@ export interface CacheOpts {
   ttlMs?: number;
   /** `false` mantém só em memória. Use para respostas grandes ou voláteis. */
   persistir?: boolean;
+  /**
+   * Persiste em **IndexedDB** em vez de sessionStorage.
+   *
+   * É o caminho para o que não cabe ou não sobrevive ao outro: IndexedDB
+   * guarda `Map` e `Set` por clonagem estruturada (sem virar texto) e tem
+   * cota de centenas de MB. A carga nacional do IBGE — ~2,5MB com um `Map`
+   * dentro — falha nos dois critérios do sessionStorage e passa nos dois
+   * daqui.
+   *
+   * Assíncrono por natureza, então a leitura acontece antes de disparar a
+   * requisição; a gravação é disparada e esquecida.
+   */
+  duravel?: boolean;
 }
 
 /** Executa `produzir` no máximo uma vez por chave dentro do TTL. */
@@ -112,16 +127,24 @@ export async function comCache<T>(
   produzir: () => Promise<T>,
   opts: CacheOpts = {},
 ): Promise<T> {
-  const { ttlMs = 6 * 60 * 60 * 1000, persistir = true } = opts;
+  const { ttlMs = 6 * 60 * 60 * 1000, persistir = true, duravel = false } = opts;
 
   const emMemoria = memoria.get(chave) as Entrada<T> | undefined;
   if (emMemoria && emMemoria.expiraEm > Date.now()) return emMemoria.valor;
 
-  if (persistir) {
+  if (persistir && !duravel) {
     const daSessao = lerSessao<T>(chave);
     if (daSessao) {
       memoria.set(chave, daSessao);
       return daSessao.valor;
+    }
+  }
+
+  if (duravel) {
+    const guardado = await armazem.ler<T>(chave);
+    if (guardado !== undefined) {
+      memoria.set(chave, { valor: guardado, expiraEm: Date.now() + ttlMs });
+      return guardado;
     }
   }
 
@@ -132,7 +155,8 @@ export async function comCache<T>(
     .then((valor) => {
       const entrada: Entrada<T> = { valor, expiraEm: Date.now() + ttlMs };
       memoria.set(chave, entrada);
-      if (persistir) gravarSessao(chave, entrada);
+      if (duravel) void armazem.gravar(chave, valor, ttlMs);
+      else if (persistir) gravarSessao(chave, entrada);
       return valor;
     })
     .finally(() => {
@@ -143,10 +167,23 @@ export async function comCache<T>(
   return promessa;
 }
 
+/**
+ * Descarta só a memória, preservando a camada durável.
+ *
+ * Serve para forçar releitura do IndexedDB sem jogar fora ~2,5MB do IBGE que
+ * levariam segundos para rebuscar — e é como os testes verificam que a
+ * persistência realmente devolve o valor.
+ */
+export function limparMemoria(): void {
+  memoria.clear();
+  emVoo.clear();
+}
+
 /** Limpa tudo — usado pelo botão "Recarregar fontes" do cabeçalho. */
 export function limparCache(): void {
   memoria.clear();
   emVoo.clear();
+  void armazem.limpar();
   try {
     Object.keys(sessionStorage)
       .filter((k) => k.startsWith(PREFIXO))
