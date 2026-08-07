@@ -213,3 +213,45 @@ export function analisarComIA(contexto: string, fatos: unknown): Promise<Respost
 export function statusIA(): Promise<{ disponivel: boolean; modelo: string }> {
   return requisitar("/api/ia/status");
 }
+
+/* ─── Agente com ferramentas ───────────────────────────────────────────── */
+
+export interface ChamadaFerramenta {
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
+}
+
+export interface MensagemAgente {
+  role: "user" | "assistant" | "tool";
+  content: string | null;
+  tool_calls?: ChamadaFerramenta[];
+  tool_call_id?: string;
+  name?: string;
+}
+
+export interface RespostaAgente {
+  disponivel: boolean;
+  mensagem?: MensagemAgente;
+  modelo?: string;
+  tokens?: number;
+  motivo?: string;
+}
+
+/**
+ * Um turno do agente.
+ *
+ * O laço vive no cliente porque as ferramentas executam aqui, sobre os 5.570
+ * municípios já carregados — mandar essa base ao servidor a cada pergunta
+ * seria trafegar megabytes para responder o que o navegador já tem. O backend
+ * só empresta a credencial da Groq.
+ */
+export function conversarComAgente(
+  mensagens: MensagemAgente[],
+  ferramentas: unknown[],
+): Promise<RespostaAgente> {
+  return requisitar<RespostaAgente>("/api/ia/agente", {
+    metodo: "POST",
+    corpo: { mensagens, ferramentas },
+  });
+}

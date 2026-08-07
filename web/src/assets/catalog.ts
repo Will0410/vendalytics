@@ -67,6 +67,17 @@ export const ASSETS = {
     height: 24,
     alt: "",
   }),
+  "icon.copiloto": spec({
+    id: "icon.copiloto",
+    kind: "icon",
+    prompt:
+      "Ícone de linha para 'Copiloto de IA': balão de conversa com faíscas de " +
+      "dados saindo dele. Traço 1.5px, cantos arredondados, monocromático, " +
+      "grade 24x24, estilo enterprise.",
+    width: 24,
+    height: 24,
+    alt: "",
+  }),
   "icon.mapa": spec({
     id: "icon.mapa",
     kind: "icon",

@@ -18,6 +18,7 @@ import { useSessao } from "./app/sessao";
 import { Login } from "./components/Login";
 import { Asset } from "./assets/AssetProvider";
 import { InteligenciaVendas } from "./modules/InteligenciaVendas";
+import { Copiloto } from "./modules/Copiloto";
 import { Geomarketing } from "./modules/Geomarketing";
 import { RelatorioPraca } from "./modules/RelatorioPraca";
 import { Prospeccao } from "./modules/Prospeccao";
@@ -155,6 +156,7 @@ export default function App() {
           <FronteiraErro chave={rotaEfetiva}>
             <Suspense fallback={<SkeletonKpis />}>
               {rotaEfetiva === "vendas" && <InteligenciaVendas />}
+              {rotaEfetiva === "copiloto" && <Copiloto />}
               {rotaEfetiva === "geomarketing" && <Geomarketing />}
               {rotaEfetiva === "mapa" && <MapaTerritorial />}
               {rotaEfetiva === "praca" && <RelatorioPraca />}

@@ -559,7 +559,7 @@ export function MapaTerritorial() {
             CEMPRE 9418/2585 (série 2022–2024), PIB 5938/37, população 6579/9324.
           </Text>
           <Row gap={2}>
-            <Badge tone="neutro">{num(pontos.length)} de 5.570 municípios com dado</Badge>
+            <Badge tone="neutro">{num(pontos.length)} municípios com dado neste recorte</Badge>
             {totalSetor > 0 && metrica === "setor" && escala === "saturacao" && (
               <Badge tone="acento">
                 {pct((top10.reduce((s, x) => s + x.pt.valor, 0) / totalSetor) * 100, 1)} nas 10

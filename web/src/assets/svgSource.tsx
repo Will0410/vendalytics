@@ -97,6 +97,18 @@ function IconGeomarketing(): ReactNode {
   );
 }
 
+function IconCopiloto(): ReactNode {
+  return (
+    <svg {...iconProps}>
+      <path d="M20.4 13.6c0 3.5-3.6 6.3-8 6.3a9.7 9.7 0 0 1-2.6-.35L4.8 21l1.2-3.3A5.9 5.9 0 0 1 4.4 13.6c0-3.5 3.6-6.3 8-6.3s8 2.8 8 6.3Z" />
+      <path d="m17.6 2.2.75 1.85 1.85.75-1.85.75-.75 1.85-.75-1.85L15 4.8l1.85-.75.75-1.85Z" fill="currentColor" stroke="none" />
+      <circle cx="9.2" cy="13.6" r="1" fill="currentColor" stroke="none" opacity="0.6" />
+      <circle cx="12.4" cy="13.6" r="1" fill="currentColor" stroke="none" opacity="0.8" />
+      <circle cx="15.6" cy="13.6" r="1" fill="currentColor" stroke="none" opacity="0.6" />
+    </svg>
+  );
+}
+
 function IconMapa(): ReactNode {
   return (
     <svg {...iconProps}>
@@ -323,6 +335,7 @@ const NODES: Partial<Record<AssetId, () => ReactNode>> = {
   "logo.mark": LogoMark,
   "icon.vendas": IconVendas,
   "icon.geomarketing": IconGeomarketing,
+  "icon.copiloto": IconCopiloto,
   "icon.mapa": IconMapa,
   "icon.praca": IconPraca,
   "icon.prospeccao": IconProspeccao,

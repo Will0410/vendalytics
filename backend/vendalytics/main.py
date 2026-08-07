@@ -270,6 +270,23 @@ def ia_analisar(body: AnaliseIAReq, user: dict = Depends(auth.get_current_user))
     return analise_ia.analisar(contexto=body.contexto, fatos=body.fatos)
 
 
+class AgenteReq(BaseModel):
+    mensagens: list[dict]
+    ferramentas: list[dict]
+
+
+@app.post("/api/ia/agente")
+def ia_agente(body: AgenteReq, user: dict = Depends(auth.get_current_user)):
+    """Um turno do agente conversacional.
+
+    O laço de ferramentas roda no NAVEGADOR, porque é lá que os 5.570
+    municípios já estão carregados — trazer essa base para cá a cada pergunta
+    seria trafegar megabytes para responder o que o cliente já tem. Este
+    endpoint só empresta a credencial da Groq e repassa o turno.
+    """
+    return analise_ia.conversar(mensagens=body.mensagens, ferramentas=body.ferramentas)
+
+
 @app.get("/api/ia/status")
 def ia_status(user: dict = Depends(auth.get_current_user)):
     return {"disponivel": analise_ia.disponivel(), "modelo": config.GROQ_MODEL}

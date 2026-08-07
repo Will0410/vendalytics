@@ -15,6 +15,7 @@ import type { AssetId } from "../assets/catalog";
 
 export type RotaId =
   | "vendas"
+  | "copiloto"
   | "geomarketing"
   | "mapa"
   | "praca"
@@ -37,6 +38,12 @@ export const ROTAS: readonly DefinicaoRota[] = [
     titulo: "Inteligência de Vendas",
     descricao: "O mercado brasileiro por setor — 10,6 milhões de empresas, quebradas por CNAE",
     icone: "icon.vendas",
+  },
+  {
+    id: "copiloto",
+    titulo: "Copiloto de Mercado",
+    descricao: "Pergunte em português — cada número vem de uma consulta ao IBGE, não da memória do modelo",
+    icone: "icon.copiloto",
   },
   {
     id: "geomarketing",
