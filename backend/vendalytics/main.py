@@ -1009,6 +1009,28 @@ if config.DEMO_MODE:
 
 
 # ── frontend estático ────────────────────────────────────────────────────
-FRONTEND_DIR = config.PROJECT_ROOT / "frontend"
-if FRONTEND_DIR.exists():
-    app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")
+#
+# Duas interfaces convivem, e a ORDEM DOS MOUNTS importa: um mount em "/"
+# captura tudo que vier depois dele, então o caminho mais específico
+# (`/legacy`) precisa ser registrado ANTES da raiz.
+#
+#   /         → web/dist   (React + Stitches) quando o build existe
+#   /legacy   → frontend/  (HTML/JS original), sempre acessível
+#
+# Sem `web/dist`, a raiz volta a servir o frontend original — é o que mantém
+# um deploy funcionando mesmo que o passo de build do Node falhe, em vez de
+# devolver 404 na home.
+FRONTEND_LEGADO = config.PROJECT_ROOT / "frontend"
+WEB_DIST = config.PROJECT_ROOT / "web" / "dist"
+
+if FRONTEND_LEGADO.exists():
+    app.mount("/legacy", StaticFiles(directory=str(FRONTEND_LEGADO), html=True), name="legado")
+
+if WEB_DIST.exists() and (WEB_DIST / "index.html").exists():
+    app.mount("/", StaticFiles(directory=str(WEB_DIST), html=True), name="web")
+    log.info("Servindo a interface React de %s (legado em /legacy)", WEB_DIST)
+elif FRONTEND_LEGADO.exists():
+    app.mount("/", StaticFiles(directory=str(FRONTEND_LEGADO), html=True), name="frontend")
+    log.warning(
+        "web/dist não encontrado — servindo o frontend original em /. "
+        "Rode `cd web && npm run build` para publicar a interface React.")

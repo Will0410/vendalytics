@@ -1,0 +1,20 @@
+node_modules/
+.vite/
+*.tsbuildinfo
+
+# segredos locais
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ATENÇÃO: `dist/` NÃO está ignorado, e isso é deliberado.
+#
+# O serviço no Render roda na imagem Python, onde a presença de Node não é
+# garantida. Versionar o bundle faz o deploy publicar a interface React mesmo
+# quando o passo de `npm run build` não roda lá.
+#
+# O custo é conhecido: **rode `npm run build` antes de commitar**, senão o
+# deploy publica o bundle da vez anterior enquanto o código-fonte já mudou.
+# ─────────────────────────────────────────────────────────────────────────────

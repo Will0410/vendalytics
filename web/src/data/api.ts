@@ -17,11 +17,23 @@
  */
 import { ApiError } from "../lib/http";
 
-/** Em desenvolvimento o Vite roda em :5273 e o FastAPI em :8901, então a
- *  origem é diferente e precisa ser explícita. Em produção, com o build
- *  servido pelo próprio FastAPI, o padrão vazio faz tudo virar caminho
- *  relativo — mesma origem, sem CORS e sem configuração. */
-const BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:8901";
+/**
+ * Origem do backend.
+ *
+ * Em desenvolvimento o Vite roda em :5273 e o FastAPI em :8901 — origens
+ * diferentes, então precisa ser absoluto. Em produção o build é servido pelo
+ * próprio FastAPI, então o certo é string vazia: tudo vira caminho relativo,
+ * mesma origem, sem CORS.
+ *
+ * O `import.meta.env.DEV` no meio disto não é enfeite. Sem ele, um build de
+ * produção sem `VITE_API_URL` definida sairia apontando para
+ * `http://localhost:8901` — e o app publicado tentaria falar com a máquina de
+ * quem está visitando. O padrão precisa estar certo nos dois lados sem exigir
+ * variável de ambiente nenhuma.
+ */
+const BASE =
+  (import.meta.env.VITE_API_URL as string | undefined) ??
+  (import.meta.env.DEV ? "http://localhost:8901" : "");
 
 export interface Sessao {
   token: string;

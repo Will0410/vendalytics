@@ -3,9 +3,21 @@ services:
     name: vendalytics
     env: python
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: cd backend && uvicorn vendalytics.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/health
+
+    # O build faz duas coisas: dependências Python e o bundle da interface
+    # React. O `|| echo` no fim é deliberado — se a imagem do Render não tiver
+    # Node, o build do front falha mas o deploy CONTINUA, e o FastAPI serve o
+    # `web/dist` que está versionado no repositório. Sem esse fallback, uma
+    # ausência de Node derrubaria o serviço inteiro em vez de publicar a
+    # interface da última vez que alguém rodou `npm run build`.
+    buildCommand: >-
+      pip install -r requirements.txt &&
+      (cd web && npm ci --no-audit --no-fund && npm run build
+       || echo "AVISO: build do front falhou — usando o web/dist versionado")
+
+    startCommand: cd backend && uvicorn vendalytics.main:app --host 0.0.0.0 --port $PORT
+
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.8
@@ -15,3 +27,13 @@ services:
         value: sqlite_reference
       - key: DEMO_MODE
         value: true
+
+      # Chave da Groq — alimenta o painel "Leitura do analista de IA".
+      # `sync: false` significa: o Render pede o valor no painel e NUNCA o
+      # grava neste arquivo. Credencial paga não entra em repositório.
+      # Sem ela o app funciona igual; só o painel de IA diz que está
+      # indisponível, e a análise determinística continua completa.
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
