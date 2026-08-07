@@ -28,3 +28,4 @@ usuarios.sqlite
 
 # scripts de teste manual com credencial real embutida — nunca comitar
 test_login.py
+var/
