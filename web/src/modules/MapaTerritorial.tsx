@@ -191,7 +191,7 @@ export function MapaTerritorial() {
   const [escala, setEscala] = useState<Escala>("atratividade");
 
   const setor = setorManual ?? filtros.secoes[0] ?? "G";
-  const { universo, carregando, erro, recarregar } = useUniverso(setor);
+  const { universo, carregando, refinando, erro, recarregar } = useUniverso(setor);
 
   /* O universo já traz métrica, crescimento e score prontos; aqui só sobra
      escolher o que dimensiona e o que colore. */
@@ -381,9 +381,11 @@ export function MapaTerritorial() {
                     : "critical"
               }
             >
-              {carregando || crescimentoNacional?.cagr == null
-                ? "—"
-                : `${crescimentoNacional.cagr >= 0 ? "+" : ""}${num(crescimentoNacional.cagr, 1)}% a.a.`}
+              {crescimentoNacional?.cagr != null
+                ? `${crescimentoNacional.cagr >= 0 ? "+" : ""}${num(crescimentoNacional.cagr, 1)}% a.a.`
+                : refinando
+                  ? "…"
+                  : "—"}
             </Text>
           </Kpi>
           <Kpi>
@@ -412,7 +414,11 @@ export function MapaTerritorial() {
                 <Text size="xs" overline>
                   Camadas
                 </Text>
-                {carregando && <LinhaCarregando texto="carregando" />}
+                {carregando ? (
+                  <LinhaCarregando texto="carregando" />
+                ) : refinando ? (
+                  <LinhaCarregando texto="série histórica" />
+                ) : null}
               </Row>
 
               <Stack gap={2}>

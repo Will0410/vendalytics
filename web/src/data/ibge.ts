@@ -468,9 +468,8 @@ export function municipiosDoSetor(secao: string): Promise<MetricasLocalidade[]> 
           VARIAVEL_EMPRESAS,
           "N6[all]",
           `${CLASSIFICACAO_CNAE}[${categoria}]`,
-          "all",
         ),
-        { timeoutMs: 60_000 },
+        { timeoutMs: 45_000 },
       );
 
       const saida: MetricasLocalidade[] = [];
@@ -490,6 +489,50 @@ export function municipiosDoSetor(secao: string): Promise<MetricasLocalidade[]> 
       }
       return saida.sort((a, b) => (b.empresas?.valor ?? 0) - (a.empresas?.valor ?? 0));
     },
+    { ttlMs: 6 * 3600 * 1000, persistir: false },
+  );
+}
+
+/**
+ * A SÉRIE anual do setor nos 5.570 municípios — separada de propósito.
+ *
+ * Medido, a mesma consulta com `periodos/all` em vez de `periodos/-1` sai de
+ * ~2s para 5–25s (o pior caso observado foi Construção, 24,5s). Buscar as duas
+ * coisas juntas fazia o mapa inteiro ficar refém do histórico: 25 segundos de
+ * tela vazia para exibir um dado que estava pronto em 2.
+ *
+ * Então o volume vem primeiro e desenha o mapa; esta função entra depois e
+ * acrescenta crescimento e sparkline. O usuário vê o país em 2s e o histórico
+ * chega sozinho, em vez de esperar tudo para ver qualquer coisa.
+ */
+export function serieDoSetor(secao: string): Promise<Map<number, { ano: number; valor: number }[]>> {
+  const categoria = CATEGORIA_SECAO[secao];
+  if (!categoria) return Promise.reject(new Error(`seção CNAE desconhecida: ${secao}`));
+
+  return comCache(
+    `ibge:serie:${secao}:municipios`,
+    async () => {
+      const corpo = await fetchJson<RespostaAgregado[]>(
+        urlAgregado(
+          AGREGADO_EMPRESAS,
+          VARIAVEL_EMPRESAS,
+          "N6[all]",
+          `${CLASSIFICACAO_CNAE}[${categoria}]`,
+          "all",
+        ),
+        { timeoutMs: 60_000 },
+      );
+
+      const saida = new Map<number, { ano: number; valor: number }[]>();
+      for (const s of corpo?.[0]?.resultados?.[0]?.series ?? []) {
+        const id = Number(s.localidade?.id);
+        if (!Number.isFinite(id)) continue;
+        const m = medidaDaSerie(s);
+        if (m?.serie) saida.set(id, m.serie);
+      }
+      return saida;
+    },
+    /* Map não sobrevive ao JSON do sessionStorage — ver a regra em lib/cache.ts. */
     { ttlMs: 6 * 3600 * 1000, persistir: false },
   );
 }

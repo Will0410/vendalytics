@@ -17,6 +17,7 @@ import { useMemo } from "react";
 import {
   cargaNacional,
   municipiosDoSetor,
+  serieDoSetor,
   ufDoCodigo,
   type MetricasLocalidade,
 } from "../data/ibge";
@@ -70,6 +71,22 @@ export function useUniverso(setor: string) {
   const doSetor = useAsync(() => municipiosDoSetor(setor), [setor]);
   const nacional = useAsync(() => cargaNacional(), []);
 
+  /**
+   * A série histórica entra por fora, e é essa separação que faz a tela abrir.
+   *
+   * Medido: a mesma consulta com `periodos/all` custa 5–25s contra ~2s de
+   * `periodos/-1`. Quando as duas vinham juntas, o mapa ficava 25 segundos em
+   * branco esperando um histórico que só serve para desenhar sparkline e
+   * calcular crescimento — enquanto o volume, que posiciona e dimensiona todas
+   * as bolinhas, já estava pronto em 2.
+   *
+   * Agora o volume desenha o país e a série chega depois. Enquanto não chega,
+   * `calcularAtratividade` reescala o peso pelos componentes disponíveis (ver
+   * atratividade.ts), então o score é válido — só não considera crescimento
+   * ainda, e a interface avisa por `refinando`.
+   */
+  const serie = useAsync(() => serieDoSetor(setor), [setor]);
+
   const universo = useMemo<Universo>(() => {
     if (!doSetor.dado || !nacional.dado) return VAZIO;
 
@@ -97,7 +114,9 @@ export function useUniverso(setor: string) {
       const uf = m.uf || ufDoCodigo(m.id);
       const medidaSetor = doSetorPorId.get(m.id) ?? null;
       const setorValor = medidaSetor?.valor ?? null;
-      const crescimento = calcularCrescimento(medidaSetor?.serie);
+      /* A série vem da carga separada; até ela chegar, `calcularCrescimento`
+         devolve o estado "indefinida" e o score se vira sem esse componente. */
+      const crescimento = calcularCrescimento(serie.dado?.get(m.id));
 
       const populacao = m.populacao?.valor ?? null;
       const pibTotal = m.pibTotal?.valor ?? null;
@@ -158,15 +177,22 @@ export function useUniverso(setor: string) {
       paraSimilaridade,
       anoReferencia: doSetor.dado[0]?.empresas?.ano ?? null,
     };
-  }, [doSetor.dado, nacional.dado]);
+  }, [doSetor.dado, nacional.dado, serie.dado]);
 
   return {
     universo,
+    /* `carregando` NÃO inclui a série: incluí-la faria a tela esperar de novo
+       os 25s que esta separação existe para evitar. */
     carregando: doSetor.carregando || nacional.carregando,
+    /** A tela já é utilizável, mas crescimento e sparkline ainda estão vindo. */
+    refinando: serie.carregando && !serie.dado,
+    /* Falha só na série não é falha da tela — o mapa continua completo, sem
+       histórico. Por isso ela não entra em `erro`. */
     erro: doSetor.erro ?? nacional.erro,
     recarregar: () => {
       doSetor.recarregar();
       nacional.recarregar();
+      serie.recarregar();
     },
   };
 }

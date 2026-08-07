@@ -76,7 +76,7 @@ export function RelatorioPraca() {
   const [, navegar] = useRota();
 
   const setorAlvo = filtros.secoes[0] ?? "G";
-  const { universo, carregando, erro, recarregar } = useUniverso(setorAlvo);
+  const { universo, carregando, refinando, erro, recarregar } = useUniverso(setorAlvo);
 
   const setores = useAsync(
     () => setoresDoMunicipio(filtros.municipioId as number),
@@ -278,6 +278,14 @@ export function RelatorioPraca() {
               <Row gap={2} wrap>
                 <Badge tone={classificacao.tone}>{classificacao.texto}</Badge>
                 <SeloTendencia tendencia={cresc.tendencia} detalhe={descCresc} />
+                {refinando && (
+                  <Badge
+                    tone="neutro"
+                    title="O score já é válido; ao chegar a série, o componente de crescimento entra e ele é recalculado."
+                  >
+                    Refinando com a série histórica…
+                  </Badge>
+                )}
               </Row>
             </Stack>
 
