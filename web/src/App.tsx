@@ -20,7 +20,6 @@ import { Asset } from "./assets/AssetProvider";
 import { InteligenciaVendas } from "./modules/InteligenciaVendas";
 import { Copiloto } from "./modules/Copiloto";
 import { Geomarketing } from "./modules/Geomarketing";
-import { PlanejamentoTerritorio } from "./modules/PlanejamentoTerritorio";
 import { RelatorioPraca } from "./modules/RelatorioPraca";
 import { Prospeccao } from "./modules/Prospeccao";
 import { Enriquecimento } from "./modules/Enriquecimento";
@@ -36,6 +35,24 @@ import { Usuarios } from "./modules/Usuarios";
  */
 const MapaTerritorial = lazy(() =>
   import("./modules/MapaTerritorial").then((m) => ({ default: m.MapaTerritorial })),
+);
+
+/**
+ * O Planejamento de Território TAMBÉM precisa ser dinâmico.
+ *
+ * Ele importa `MapaBrasil` e os centroides. Estático, arrasta Leaflet +
+ * markercluster + 161KB de coordenadas para o bundle principal e anula o
+ * code-splitting do módulo acima — foi o que aconteceu quando ele entrou:
+ * 721KB viraram 1,12MB e o chunk do mapa caiu para 9KB, porque não sobrou
+ * nada nele para separar.
+ *
+ * Com os dois dinâmicos, o Leaflet vira um chunk compartilhado que só desce
+ * para quem abre um mapa de verdade.
+ */
+const PlanejamentoTerritorio = lazy(() =>
+  import("./modules/PlanejamentoTerritorio").then((m) => ({
+    default: m.PlanejamentoTerritorio,
+  })),
 );
 
 const Shell = styled("div", {
