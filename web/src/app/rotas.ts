@@ -18,6 +18,7 @@ export type RotaId =
   | "copiloto"
   | "geomarketing"
   | "mapa"
+  | "territorios"
   | "praca"
   | "prospeccao"
   | "enriquecimento"
@@ -56,6 +57,12 @@ export const ROTAS: readonly DefinicaoRota[] = [
     titulo: "Mapa Territorial",
     descricao: "Os 5.570 municípios do Brasil no mapa — uma bolinha por praça",
     icone: "icon.mapa",
+  },
+  {
+    id: "territorios",
+    titulo: "Planejamento de Território",
+    descricao: "Tenho N vendedores — onde coloco cada um? Divisão automática equilibrada por potencial",
+    icone: "icon.territorio",
   },
   {
     id: "praca",

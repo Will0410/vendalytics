@@ -124,6 +124,20 @@ function IconMapa(): ReactNode {
   );
 }
 
+function IconTerritorio(): ReactNode {
+  return (
+    <svg {...iconProps}>
+      <circle cx="12" cy="12" r="9" />
+      {/* As divisas do território */}
+      <path d="M12 3v9l7.8 4.5M12 12 4.2 16.5" opacity="0.7" />
+      {/* Uma sede por zona */}
+      <circle cx="14.6" cy="7.6" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="16.2" cy="15" r="1.2" fill="currentColor" stroke="none" opacity="0.75" />
+      <circle cx="7.8" cy="13.6" r="1.2" fill="currentColor" stroke="none" opacity="0.75" />
+    </svg>
+  );
+}
+
 function IconPraca(): ReactNode {
   return (
     <svg {...iconProps}>
@@ -337,6 +351,7 @@ const NODES: Partial<Record<AssetId, () => ReactNode>> = {
   "icon.geomarketing": IconGeomarketing,
   "icon.copiloto": IconCopiloto,
   "icon.mapa": IconMapa,
+  "icon.territorio": IconTerritorio,
   "icon.praca": IconPraca,
   "icon.prospeccao": IconProspeccao,
   "icon.usuarios": IconUsuarios,

@@ -236,18 +236,61 @@ const BRASIL: L.LatLngBoundsExpression = [
   [5.6, -33.5],
 ];
 
+/**
+ * Enquadramento a partir dos PONTOS, não do país.
+ *
+ * Fixar o Brasil inteiro parecia razoável até um módulo desenhar só São Paulo:
+ * o resultado era o estado inteiro espremido no meio da tela, com metade do
+ * mapa ocupada pelo Atlântico e pela África. O enquadramento tem que seguir o
+ * dado que está na tela.
+ *
+ * Sem pontos, volta para o Brasil — é o estado de carregamento, e mostrar o
+ * país é melhor que mostrar o mundo.
+ */
+function limitesDe(pontos: PontoMapa[]): L.LatLngBoundsExpression {
+  if (pontos.length === 0) return BRASIL;
+
+  let minLat = Infinity;
+  let maxLat = -Infinity;
+  let minLon = Infinity;
+  let maxLon = -Infinity;
+  for (const p of pontos) {
+    if (p.lat < minLat) minLat = p.lat;
+    if (p.lat > maxLat) maxLat = p.lat;
+    if (p.lon < minLon) minLon = p.lon;
+    if (p.lon > maxLon) maxLon = p.lon;
+  }
+
+  /* Um ponto só (ou todos no mesmo lugar) daria caixa de área zero, e o
+     Leaflet responderia com o zoom máximo. A folga evita isso. */
+  const folga = 0.4;
+  return [
+    [minLat - folga, minLon - folga],
+    [maxLat + folga, maxLon + folga],
+  ];
+}
+
 export function MapaBrasil({
   pontos,
   aoAbrirPraca,
   formatarValor,
+  /** Espaço à direita ocupado por painel sobreposto, em px. */
+  folgaDireita = 336,
+  /** Espaço no topo ocupado pela faixa de KPIs, em px. */
+  folgaTopo = 74,
 }: {
   pontos: PontoMapa[];
   aoAbrirPraca: (municipioId: number) => void;
   formatarValor: (v: number) => string;
+  folgaDireita?: number;
+  folgaTopo?: number;
 }) {
   const elRef = useRef<HTMLDivElement>(null);
   const mapaRef = useRef<L.Map | null>(null);
   const grupoRef = useRef<L.MarkerClusterGroup | null>(null);
+  /** Assinatura do último enquadramento aplicado — evita reposicionar o mapa
+   *  a cada mudança de métrica, que jogaria fora o zoom do usuário. */
+  const enquadradoRef = useRef<string>("");
 
   /* O callback muda de identidade a cada render; guardá-lo numa ref evita
      recriar 5.570 marcadores só porque o pai renderizou. */
@@ -274,12 +317,20 @@ export function MapaBrasil({
     });
     L.control.zoom({ position: "bottomleft" }).addTo(mapa);
 
-    /* O enquadramento desconta as sobreposições: sem isto o Brasil é centrado
-       no container inteiro e metade dele fica debaixo do painel de camadas. */
-    mapa.fitBounds(BRASIL, {
-      paddingTopLeft: L.point(16, 74),
-      paddingBottomRight: L.point(336, 24),
-    });
+    /* View inicial OBRIGATÓRIA. Sem centro e zoom válidos o Leaflet não sabe
+       quais tiles pedir e o container fica em branco — foi exatamente o que
+       aconteceu quando este `fitBounds` foi removido em favor do
+       enquadramento por dados: os dados só chegam no efeito seguinte, e até
+       lá o mapa não existia de fato. O reenquadramento pelos pontos acontece
+       depois, por cima deste. */
+    mapa.fitBounds(BRASIL);
+    /* A assinatura de enquadramento descreve ESTE mapa. Zerá-la aqui é o que
+       impede o bug do StrictMode: o efeito monta duas vezes, a 1ª montagem
+       enquadra e guarda a assinatura, a limpeza destrói o mapa, e a 2ª criaria
+       um mapa novo que a guarda "já enquadrei isso" deixaria parado no Brasil.
+       A ref não pode sobreviver ao mapa que ela descreve. */
+    enquadradoRef.current = "";
+
 
     L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
       attribution:
@@ -305,6 +356,7 @@ export function MapaBrasil({
       mapa.remove();
       mapaRef.current = null;
       grupoRef.current = null;
+      enquadradoRef.current = "";
     };
   }, []);
 
@@ -365,7 +417,18 @@ export function MapaBrasil({
 
     grupo.addTo(mapa);
     grupoRef.current = grupo;
-  }, [pontos, maximo]);
+
+    /* Reenquadra só quando a REGIÃO coberta muda — trocar a métrica que
+       dimensiona a bolinha não deve mexer no zoom que o usuário ajustou. */
+    const assinatura = JSON.stringify(limitesDe(pontos));
+    if (assinatura !== enquadradoRef.current) {
+      enquadradoRef.current = assinatura;
+      mapa.fitBounds(limitesDe(pontos), {
+        paddingTopLeft: L.point(16, folgaTopo),
+        paddingBottomRight: L.point(folgaDireita, 24),
+      });
+    }
+  }, [pontos, maximo, folgaTopo, folgaDireita]);
 
   return <Moldura ref={elRef} />;
 }

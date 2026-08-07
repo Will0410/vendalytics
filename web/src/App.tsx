@@ -20,6 +20,7 @@ import { Asset } from "./assets/AssetProvider";
 import { InteligenciaVendas } from "./modules/InteligenciaVendas";
 import { Copiloto } from "./modules/Copiloto";
 import { Geomarketing } from "./modules/Geomarketing";
+import { PlanejamentoTerritorio } from "./modules/PlanejamentoTerritorio";
 import { RelatorioPraca } from "./modules/RelatorioPraca";
 import { Prospeccao } from "./modules/Prospeccao";
 import { Enriquecimento } from "./modules/Enriquecimento";
@@ -159,6 +160,7 @@ export default function App() {
               {rotaEfetiva === "copiloto" && <Copiloto />}
               {rotaEfetiva === "geomarketing" && <Geomarketing />}
               {rotaEfetiva === "mapa" && <MapaTerritorial />}
+              {rotaEfetiva === "territorios" && <PlanejamentoTerritorio />}
               {rotaEfetiva === "praca" && <RelatorioPraca />}
               {rotaEfetiva === "prospeccao" && <Prospeccao />}
               {rotaEfetiva === "enriquecimento" && <Enriquecimento />}

@@ -89,6 +89,17 @@ export const ASSETS = {
     height: 24,
     alt: "",
   }),
+  "icon.territorio": spec({
+    id: "icon.territorio",
+    kind: "icon",
+    prompt:
+      "Ícone de linha para 'Planejamento de Território': mapa dividido em " +
+      "setores/zonas por linhas radiais, com um pino em cada zona. Traço " +
+      "1.5px, cantos arredondados, monocromático, grade 24x24.",
+    width: 24,
+    height: 24,
+    alt: "",
+  }),
   "icon.praca": spec({
     id: "icon.praca",
     kind: "icon",
