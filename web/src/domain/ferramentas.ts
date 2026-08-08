@@ -61,6 +61,15 @@ export const FERRAMENTAS = [
             description: "Saturação máxima. 1,0 = mediana da UF. Use 0.8 para 'subexplorada'.",
           },
           empresas_setor_min: { type: "number" },
+          ordenar_por: {
+            type: "string",
+            enum: ["atratividade", "empresas", "crescimento", "populacao"],
+            description:
+              "Como ordenar. Padrão: atratividade. Use `empresas` para 'quais têm MAIS " +
+              "empresas', `crescimento` para 'quais crescem mais', `populacao` para " +
+              "'quais são maiores'. O critério errado devolve os números certos na " +
+              "ordem errada.",
+          },
           limite: { type: "number", description: `Quantas devolver. Máximo ${TETO}.` },
         },
       },
@@ -259,6 +268,7 @@ export function executarFerramenta(
         score_min,
         saturacao_max,
         empresas_setor_min,
+        ordenar_por,
         limite,
       } = args as Record<string, number | string | undefined>;
 
@@ -285,9 +295,31 @@ export function executarFerramenta(
       });
 
       const n = Math.min(Number(limite) || 10, TETO);
-      const ordenadas = [...filtradas].sort(
-        (a, b) => b.atratividade.score - a.atratividade.score,
-      );
+
+      /**
+       * A ordenação é parâmetro porque a alternativa foi medida e falhou.
+       *
+       * Antes só existia atratividade. Perguntado "quais praças de SC têm MAIS
+       * empresas de comércio", o modelo chamou a ferramenta, recebeu o top-10
+       * por atratividade e respondeu "Navegantes 1.452, Içara 1.321, Itajaí
+       * 7.246" — três números corretos, apresentados como um ranking de volume
+       * que eles não formam. A descrição já dizia por qual critério a lista
+       * vinha; dizer não bastou.
+       *
+       * Números certos na ordem errada é a falha mais perigosa desta camada:
+       * cada valor resiste à conferência individual e a frase inteira é falsa.
+       * O `ordenado_por` volta no payload para que a resposta possa se
+       * qualificar.
+       */
+      const criterio = String(ordenar_por ?? "atratividade");
+      const chave: Record<string, (p: Praca) => number> = {
+        atratividade: (p) => p.atratividade.score,
+        empresas: (p) => p.setor ?? 0,
+        crescimento: (p) => p.crescimento.cagr ?? -Infinity,
+        populacao: (p) => p.populacao ?? 0,
+      };
+      const extrair = chave[criterio] ?? chave["atratividade"] as (p: Praca) => number;
+      const ordenadas = [...filtradas].sort((a, b) => extrair(b) - extrair(a));
 
       return {
         ok: true,
@@ -295,6 +327,7 @@ export function executarFerramenta(
           setor_analisado: nomeSetor,
           total_que_atendem: filtradas.length,
           exibindo: Math.min(n, ordenadas.length),
+          ordenado_por: criterio,
           pracas: ordenadas.slice(0, n).map(resumir),
         },
       };

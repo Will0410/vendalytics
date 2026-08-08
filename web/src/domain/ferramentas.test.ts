@@ -80,6 +80,59 @@ describe("declaração das ferramentas", () => {
   });
 });
 
+describe("filtrar_pracas — ordenação", () => {
+  /* Esta suíte existe por uma falha vista ao vivo, gravando a demonstração.
+
+     Perguntado "quais praças de SC têm MAIS empresas de comércio", o modelo
+     chamou a ferramenta, recebeu o top-10 por ATRATIVIDADE e respondeu
+     "Navegantes 1.452, Içara 1.321, Itajaí 7.246" — três números corretos
+     apresentados como um ranking de volume que eles não formam.
+
+     Números certos na ordem errada é a falha mais perigosa desta camada: cada
+     valor resiste à conferência individual e a frase inteira é falsa. A
+     descrição da ferramenta já dizia por qual critério a lista vinha. Dizer
+     não bastou; virou parâmetro. */
+
+  const ordenado = (criterio: string | undefined, campo: (p: never) => number) => {
+    const args = criterio ? { ordenar_por: criterio, limite: 25 } : { limite: 25 };
+    const d = executarFerramenta("filtrar_pracas", args, ctx("G")).dados as Record<string, unknown>;
+    const v = (d["pracas"] as never[]).map(campo);
+    return { v, d };
+  };
+
+  it("por padrão ordena por atratividade e diz isso no retorno", () => {
+    const { v, d } = ordenado(undefined, (p) => (p as { score_atratividade: number }).score_atratividade);
+    expect(d["ordenado_por"]).toBe("atratividade");
+    expect(v).toEqual([...v].sort((a, b) => b - a));
+  });
+
+  it("ordena por número de empresas quando pedido", () => {
+    const { v, d } = ordenado("empresas", (p) => (p as { empresas_do_setor: number }).empresas_do_setor);
+    expect(d["ordenado_por"]).toBe("empresas");
+    expect(v).toEqual([...v].sort((a, b) => b - a));
+  });
+
+  it("ordena por população quando pedido", () => {
+    const { v } = ordenado("populacao", (p) => (p as { populacao: number }).populacao);
+    expect(v).toEqual([...v].sort((a, b) => b - a));
+  });
+
+  it("critério inválido cai no padrão em vez de devolver ordem aleatória", () => {
+    const { v, d } = ordenado("inventado", (p) => (p as { score_atratividade: number }).score_atratividade);
+    expect(d["ordenado_por"]).toBe("inventado");
+    expect(v).toEqual([...v].sort((a, b) => b - a));
+  });
+
+  it("o critério viaja no payload — a resposta precisa poder se qualificar", () => {
+    /* Sem este campo o modelo não tem como saber por qual régua a lista veio,
+       e foi exatamente assim que ele errou. */
+    for (const c of ["atratividade", "empresas", "crescimento", "populacao"]) {
+      const d = executarFerramenta("filtrar_pracas", { ordenar_por: c }, ctx("G")).dados as Record<string, unknown>;
+      expect(d["ordenado_por"]).toBe(c);
+    }
+  });
+});
+
 describe("vazios_de_mercado", () => {
   it("devolve as praças desabastecidas do setor validado", () => {
     const r = executarFerramenta("vazios_de_mercado", {}, ctx("G"));
