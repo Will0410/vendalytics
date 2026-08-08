@@ -100,6 +100,18 @@ export const ASSETS = {
     height: 24,
     alt: "",
   }),
+  "icon.ecossistema": spec({
+    id: "icon.ecossistema",
+    kind: "icon",
+    prompt:
+      "Ícone de linha para 'Ecossistema': grafo de nós conectados, com um nó " +
+      "vazado (tracejado) ligado a três nós cheios — a atividade que ainda não " +
+      "existe, presa às capacidades que já existem. Traço 1.5px, cantos " +
+      "arredondados, monocromático, grade 24x24, estilo enterprise.",
+    width: 24,
+    height: 24,
+    alt: "",
+  }),
   "icon.vazios": spec({
     id: "icon.vazios",
     kind: "icon",

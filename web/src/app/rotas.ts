@@ -19,6 +19,7 @@ export type RotaId =
   | "geomarketing"
   | "mapa"
   | "territorios"
+  | "ecossistema"
   | "vazios"
   | "praca"
   | "prospeccao"
@@ -64,6 +65,12 @@ export const ROTAS: readonly DefinicaoRota[] = [
     titulo: "Planejamento de Território",
     descricao: "Tenho N vendedores — onde coloco cada um? Divisão automática equilibrada por potencial",
     icone: "icon.territorio",
+  },
+  {
+    id: "ecossistema",
+    titulo: "Ecossistema",
+    descricao: "Quais praças já têm as capacidades vizinhas do seu cliente — rede de proximidade entre 87 divisões CNAE",
+    icone: "icon.ecossistema",
   },
   {
     id: "vazios",

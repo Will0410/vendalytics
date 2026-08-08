@@ -144,6 +144,26 @@ function IconTerritorio(): ReactNode {
  * uma barra cheia num tom mais claro pareceria um dado a menos, não um
  * dado que falta.
  */
+/**
+ * A rede: três capacidades que existem, ligadas a uma que não existe ainda.
+ * O nó tracejado é o mesmo recurso do ícone de Vazios — ausência só se
+ * desenha honestamente com contorno aberto.
+ */
+function IconEcossistema(): ReactNode {
+  return (
+    <svg {...iconProps}>
+      <path d="M7.4 7.6 12.6 6.4M6.8 10.2l3.4 5.1M9.2 17.4l4.6-1.2" opacity="0.55" />
+      {/* As ligações com o que falta */}
+      <path d="M15.4 7.4 9.4 6.6M16.2 9.4l-4.8 5.6" strokeDasharray="2 2.2" opacity="0.8" />
+      <circle cx="6.6" cy="6.4" r="2.1" fill="currentColor" stroke="none" />
+      <circle cx="5.6" cy="13.6" r="1.8" fill="currentColor" stroke="none" opacity="0.85" />
+      <circle cx="10.4" cy="18.4" r="1.8" fill="currentColor" stroke="none" opacity="0.85" />
+      {/* O que ainda não existe */}
+      <circle cx="17.8" cy="8" r="2.6" strokeDasharray="2.2 2" />
+    </svg>
+  );
+}
+
 function IconVazios(): ReactNode {
   return (
     <svg {...iconProps}>
@@ -370,6 +390,7 @@ const NODES: Partial<Record<AssetId, () => ReactNode>> = {
   "icon.copiloto": IconCopiloto,
   "icon.mapa": IconMapa,
   "icon.territorio": IconTerritorio,
+  "icon.ecossistema": IconEcossistema,
   "icon.vazios": IconVazios,
   "icon.praca": IconPraca,
   "icon.prospeccao": IconProspeccao,
