@@ -133,6 +133,47 @@ describe("filtrar_pracas — ordenação", () => {
   });
 });
 
+describe("filtrar_pracas — região tolerante", () => {
+  /* Filmando a demonstração, a Groq recusou a chamada inteira com HTTP 400:
+
+       tool call validation failed: '/regiao': value must be one of
+       "Norte", "Nordeste", "Centro-Oeste"...
+
+     O provedor valida os argumentos contra o schema ANTES de nos entregar, e
+     um `enum` ali transforma "sul" em turno perdido com despejo de erro na
+     tela. O enum saiu da declaração; a tolerância vive aqui. */
+
+  const ufs = (regiao: string) => {
+    const r = executarFerramenta("filtrar_pracas", { regiao, limite: 25 }, ctx("G"));
+    const d = r.dados as { pracas?: Array<{ uf: string }> } | undefined;
+    return { ok: r.ok, ufs: new Set((d?.pracas ?? []).map((p) => p.uf)), erro: r.erro };
+  };
+
+  it("aceita a forma canônica", () => {
+    expect(ufs("Sul").ufs.has("SC")).toBe(true);
+  });
+
+  it("aceita caixa, acento e hífen trocados", () => {
+    for (const v of ["sul", "SUL", "Centro-Oeste", "centro oeste", "CENTRO-OESTE", "sudeste"]) {
+      expect(ufs(v).ok, `região "${v}"`).toBe(true);
+    }
+  });
+
+  it("nunca mistura estados de regiões diferentes", () => {
+    const sul = ufs("sul").ufs;
+    expect([...sul].every((u) => ["PR", "SC", "RS"].includes(u))).toBe(true);
+  });
+
+  it("região inexistente devolve erro corrigível, não filtro silencioso", () => {
+    /* Antes, uma região desconhecida caía em `undefined` e a busca corria SEM
+       filtro nenhum — devolvendo o Brasil inteiro como se fosse a resposta. */
+    const r = ufs("Nordestte");
+    expect(r.ok).toBe(false);
+    expect(r.erro).toMatch(/não existe/i);
+    expect(r.erro).toMatch(/Nordeste/);
+  });
+});
+
 describe("vazios_de_mercado", () => {
   it("devolve as praças desabastecidas do setor validado", () => {
     const r = executarFerramenta("vazios_de_mercado", {}, ctx("G"));

@@ -44,10 +44,14 @@ export const FERRAMENTAS = [
         type: "object",
         properties: {
           uf: { type: "string", description: "Sigla da UF (ex: SP, SC). Omita para o Brasil todo." },
+          /* SEM `enum` de propósito — ver `regiaoDe()` abaixo. A Groq valida os
+             argumentos contra este schema e rejeita a REQUISIÇÃO INTEIRA com
+             400 quando o modelo erra o valor por um acento. */
           regiao: {
             type: "string",
-            enum: ["Norte", "Nordeste", "Centro-Oeste", "Sudeste", "Sul"],
-            description: "Região do país. Alternativa a `uf`.",
+            description:
+              "Região do país: Norte, Nordeste, Centro-Oeste, Sudeste ou Sul. " +
+              "Alternativa a `uf`.",
           },
           populacao_min: { type: "number" },
           populacao_max: { type: "number" },
@@ -175,6 +179,32 @@ const REGIOES: Record<string, string[]> = {
   Sul: ["PR", "SC", "RS"],
 };
 
+/**
+ * Resolve o nome da região tolerando acento, caixa e hífen.
+ *
+ * A declaração desta propriedade NÃO tem `enum`, e isso é deliberado. A Groq
+ * valida os argumentos da chamada contra o schema antes de nos entregar, e
+ * rejeita a REQUISIÇÃO INTEIRA com HTTP 400 quando o valor não bate exatamente
+ * — o turno morre e o usuário recebe um despejo de erro da API.
+ *
+ * Foi o que aconteceu, filmando a demonstração:
+ *
+ *   Groq recusou a chamada (400). tool call validation failed:
+ *   '/regiao': value must be one of "Norte", "Nordeste", "Centro-Oeste"...
+ *
+ * Um modelo que escreve "sul" ou "Centro Oeste" está certo o bastante para
+ * qualquer humano. Sem o `enum`, o valor chega aqui e este código decide — e
+ * quando não reconhece, devolve um erro de ferramenta que o agente sabe
+ * corrigir, em vez de derrubar a conversa.
+ */
+function regiaoDe(valor: unknown): string[] | undefined {
+  const alvo = chave(String(valor ?? "")).replace(/[\s-]/g, "");
+  for (const [nome, ufs] of Object.entries(REGIOES)) {
+    if (chave(nome).replace(/[\s-]/g, "") === alvo) return ufs;
+  }
+  return undefined;
+}
+
 /** Normaliza para casar "Sao Paulo", "SÃO PAULO" e "são  paulo". O modelo
  *  escreve o nome como ouviu, não como está na base do IBGE. */
 function chave(s: string): string {
@@ -272,7 +302,19 @@ export function executarFerramenta(
         limite,
       } = args as Record<string, number | string | undefined>;
 
-      const ufsDaRegiao = regiao ? REGIOES[String(regiao)] : null;
+      let ufsDaRegiao: string[] | null = null;
+      if (regiao) {
+        const achada = regiaoDe(regiao);
+        if (!achada) {
+          return {
+            ok: false,
+            erro:
+              `Região "${regiao}" não existe. Use uma de: ${Object.keys(REGIOES).join(", ")} ` +
+              "— ou passe `uf` com a sigla do estado.",
+          };
+        }
+        ufsDaRegiao = achada;
+      }
 
       const filtradas = universo.pracas.filter((p) => {
         if (uf && p.uf.toUpperCase() !== String(uf).toUpperCase()) return false;
