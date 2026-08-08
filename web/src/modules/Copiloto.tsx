@@ -245,6 +245,19 @@ export function Copiloto() {
               name: c.function.name,
               content: JSON.stringify(res.ok ? res.dados : { erro: res.erro }),
             });
+
+            /* Recusa permanente encerra a conversa aqui, com o motivo na tela.
+               Devolver ao modelo só faria ele tentar de novo com outro
+               argumento — foi o comportamento medido ao vivo — e queimar as
+               rodadas restantes para chegar a "tente uma pergunta mais
+               específica", que não explica nada. */
+            if (res.definitivo) {
+              setItens((a) => [
+                ...a,
+                { tipo: "agente", texto: res.erro ?? "Consulta não aplicável." },
+              ]);
+              return;
+            }
           }
         }
 

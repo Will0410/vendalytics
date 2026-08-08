@@ -23,6 +23,7 @@ import type { Praca, Universo } from "../app/useUniverso";
 import { pracasSemelhantes } from "./similaridade";
 import { DESCRICAO_FAIXA_ATRATIVIDADE } from "./atratividade";
 import { ROTULO_TENDENCIA } from "./crescimento";
+import { mapearVazios, validadoPara } from "./vazios";
 import { SECOES } from "../data/cnae";
 
 /** Teto de itens por resposta. Acima disso a conversa fica cara e o modelo
@@ -116,6 +117,28 @@ export const FERRAMENTAS = [
   {
     type: "function",
     function: {
+      name: "vazios_de_mercado",
+      description:
+        "Municípios com MENOS empresas do que o esperado para seu tamanho e poder de compra — " +
+        "demanda sem oferta. Diferente das outras ferramentas, esta é PREDITIVA: foi validada " +
+        "contra crescimento futuro. Só funciona para Comércio (G) e Indústria (C); em outros " +
+        "setores devolve erro explicando o motivo. Use quando perguntarem onde há oportunidade, " +
+        "onde falta empresa, ou onde expandir.",
+      parameters: {
+        type: "object",
+        properties: {
+          uf: { type: "string", description: "Sigla da UF, para recortar. Opcional." },
+          populacao_min: {
+            type: "number",
+            description: "Ignora municípios menores que isto. Útil para achar praça com escala.",
+          },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "comparar_pracas",
       description: "Compara de 2 a 5 municípios lado a lado nos mesmos indicadores.",
       parameters: {
@@ -198,6 +221,19 @@ export interface ResultadoFerramenta {
   ok: boolean;
   dados?: unknown;
   erro?: string;
+  /**
+   * Recusa PERMANENTE: tentar de novo com outro argumento não muda nada.
+   *
+   * Existe porque foi o que o modelo fez, medido ao vivo. Ao receber a recusa
+   * do portão de setor, a Llama 3.3 não repassou a explicação — repetiu a
+   * mesma ferramenta com `{uf:"SP"}`, porque LLM lê erro como "tente
+   * diferente". Sem esta marca, o usuário que pergunta sobre Construção gasta
+   * as 4 rodadas do agente e recebe "tente uma pergunta mais específica" em
+   * vez do motivo real.
+   *
+   * Quem decide não é o prompt, é o laço: ver `Copiloto.tsx`.
+   */
+  definitivo?: boolean;
 }
 
 export function executarFerramenta(
@@ -324,6 +360,105 @@ export function executarFerramenta(
               score_atratividade: alvo?.atratividade.score ?? null,
             };
           }),
+        },
+      };
+    }
+
+    /**
+     * A única ferramenta PREDITIVA do conjunto — e por isso a única que
+     * devolve a própria acurácia junto com o resultado.
+     *
+     * O modelo parafraseia o que recebe. Se ele receber só a lista de
+     * lacunas, vai apresentá-la com a mesma confiança com que apresenta uma
+     * contagem do IBGE — e não é a mesma coisa: contagem é fato, lacuna é
+     * estimativa que explica ~5% da variação. O campo `acuracia` viaja junto
+     * para que a ressalva esteja no contexto, não na esperança de que o
+     * prompt do sistema baste.
+     */
+    case "vazios_de_mercado": {
+      if (!validadoPara(setor)) {
+        return {
+          ok: false,
+          definitivo: true,
+          erro:
+            `O indicador de vazios de mercado não vale para ${nomeSetor} (${setor}). ` +
+            "Ele pressupõe equilíbrio de mercado local — a empresa se instalar onde está a " +
+            "demanda que atende. Testado fora da amostra, Construção deu rho = +0,040 (sinal " +
+            "nulo e trocado) contra -0,232 no Comércio. Só Comércio (G) e Indústria (C) foram " +
+            "validados. Diga isso a quem perguntou em vez de estimar por conta própria.",
+        };
+      }
+
+      const uf = args.uf as string | undefined;
+      const populacaoMin = args.populacao_min as number | undefined;
+
+      const escopo = universo.pracas.filter(
+        (p) =>
+          (!uf || p.uf.toUpperCase() === uf.toUpperCase()) &&
+          (!populacaoMin || (p.populacao ?? 0) >= populacaoMin),
+      );
+      if (escopo.length === 0) {
+        return { ok: false, erro: `Nenhum município atende ao recorte pedido.` };
+      }
+
+      /* O modelo é sempre ajustado no universo NACIONAL, mesmo quando a
+         pergunta é sobre uma UF: a elasticidade estimada só em Sergipe seria
+         estimada em 75 municípios, e o que se quer saber é se a praça está
+         abaixo do padrão do país — não abaixo do padrão dos vizinhos pobres. */
+      const modelo = mapearVazios(
+        universo.pracas.map((p) => ({
+          id: p.id,
+          populacao: p.populacao,
+          pibPerCapita: p.pibPerCapita,
+          empresas: p.setor,
+        })),
+      );
+      if (modelo.amostra === 0) {
+        return { ok: false, erro: "Dados insuficientes para ajustar o modelo agora." };
+      }
+
+      /* Mesma regra da tela: o resíduo qualifica, a lacuna absoluta ordena.
+         Ordenar só pelo resíduo devolveria municípios de 6 mil habitantes aos
+         quais faltam 8 empresas. */
+      const idsNoEscopo = new Set(escopo.map((p) => p.id));
+      const lista = modelo.vazios
+        .filter((v) => idsNoEscopo.has(v.id) && v.percentil >= 75)
+        .sort((a, b) => b.lacuna - a.lacuna)
+        .slice(0, TETO)
+        .map((v) => {
+          const p = universo.porId.get(v.id);
+          return {
+            municipio: p?.nome ?? String(v.id),
+            uf: p?.uf ?? "",
+            empresas_hoje: Math.round(v.observado),
+            empresas_esperadas: Math.round(v.esperado),
+            faltam: Math.round(v.lacuna),
+            percentil_desabastecimento: Math.round(v.percentil),
+            populacao: p?.populacao ?? null,
+            pib_per_capita: p?.pibPerCapita ?? null,
+          };
+        });
+
+      return {
+        ok: true,
+        dados: {
+          setor: `${setor} — ${nomeSetor}`,
+          recorte: uf ? `UF ${uf.toUpperCase()}` : "Brasil",
+          criterio:
+            "Quartil mais desabastecido do país (percentil 75+), ordenado pelo tamanho da lacuna.",
+          municipios_no_modelo: modelo.amostra,
+          variacao_explicada_pct: Math.round(modelo.r2 * 1000) / 10,
+          praças: lista,
+          acuracia: {
+            metodo:
+              "Modelo ajustado em 2013 e conferido contra o crescimento de 2015 a 2020. Janelas disjuntas.",
+            correlacao_com_crescimento_futuro: setor.toUpperCase() === "C" ? -0.201 : -0.232,
+            referencia_densidade_pura: setor.toUpperCase() === "C" ? -0.096 : -0.17,
+            ressalva:
+              "Explica cerca de 5% da variação. Serve para PRIORIZAR a ordem das praças, " +
+              "não para afirmar o que vai acontecer em uma delas. Apresente como prioridade " +
+              "de visita, nunca como previsão. Não omita esta ressalva na resposta.",
+          },
         },
       };
     }

@@ -18,6 +18,7 @@ import { autenticar, mockarFontes, renderizar } from "./ambiente";
 import { RelatorioPraca } from "../modules/RelatorioPraca";
 import { Usuarios } from "../modules/Usuarios";
 import { Prospeccao } from "../modules/Prospeccao";
+import { VaziosDeMercado } from "../modules/VaziosDeMercado";
 
 beforeEach(() => {
   autenticar();
@@ -181,5 +182,63 @@ describe("Prospecção B2B", () => {
       String(c[0]).includes("11111111111111"),
     );
     expect(consultas).toHaveLength(0);
+  });
+});
+
+/* ─── Vazios de Mercado ────────────────────────────────────────────────── */
+
+describe("Vazios de Mercado", () => {
+  /* O caminho feliz com números reais está em `domain/vazios.validacao.test.ts`,
+     que roda o modelo sobre o conjunto de 4.979 municípios da pesquisa. Aqui o
+     que importa são os dois ramos que só existem na tela: o portão de setor e
+     o estado de amostra insuficiente. */
+
+  it("BLOQUEIA setor não validado em vez de mostrar números", async () => {
+    /* A decisão de produto mais importante do módulo. O modelo roda em
+       qualquer seção CNAE e devolve números de aparência idêntica; foi o teste
+       fora da amostra que reprovou Construção (rho = +0,040). */
+    window.location.hash = "#/vazios?uf=SP&cnae=F";
+
+    renderizar(
+      <StrictMode>
+        <VaziosDeMercado />
+      </StrictMode>,
+    );
+
+    expect(await screen.findByText(/não foi validado/i)).toBeInTheDocument();
+    expect(screen.getByText(/\+0,040/)).toBeInTheDocument();
+    expect(screen.getByText(/mercado local/i)).toBeInTheDocument();
+
+    /* E nenhuma lacuna na tela — nem tabela, nem ranking. */
+    expect(screen.queryByText(/Onde ir primeiro/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/maiores lacunas/i)).not.toBeInTheDocument();
+  });
+
+  it("oferece os setores validados como saída", async () => {
+    window.location.hash = "#/vazios?uf=SP&cnae=F";
+    renderizar(<VaziosDeMercado />);
+
+    await screen.findByText(/não foi validado/i);
+    expect(screen.getByText(/Setores validados/i)).toBeInTheDocument();
+  });
+
+  it("diz que faltou dado em vez de mostrar zeros", async () => {
+    /* O mock tem 5 municípios e o modelo exige 50. Sem este ramo a tela
+       mostrava "0 municípios", "0,0% da variação" e elasticidades "0,00" numa
+       tabela vazia: não quebra, mas parece quebrada, e o usuário não tem como
+       saber que o problema é falta de dado e não erro de cálculo. */
+    window.location.hash = "#/vazios?uf=SP&cnae=G";
+
+    renderizar(
+      <StrictMode>
+        <VaziosDeMercado />
+      </StrictMode>,
+    );
+
+    expect(
+      await screen.findByText(/Dados insuficientes/i, {}, { timeout: 5000 }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("0,0%")).not.toBeInTheDocument();
+    expect(screen.queryByText(/falhou ao renderizar/i)).not.toBeInTheDocument();
   });
 });

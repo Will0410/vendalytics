@@ -119,6 +119,28 @@ export function VaziosDeMercado() {
     );
   }
 
+  /* Amostra insuficiente para ajustar. Sem este ramo a tela mostrava
+     "0 municípios", "0,0% da variação" e elasticidades "0,00" numa tabela
+     vazia — não quebra, mas parece quebrada, e o usuário não tem como saber
+     que o problema é falta de dado e não erro de cálculo. */
+  if (resultado.amostra === 0) {
+    return (
+      <Stack gap={6}>
+        <Cabecalho setor={setor} />
+        <Card padding="lg">
+          <Stack gap={3}>
+            <Heading size="md">Dados insuficientes para ajustar o modelo</Heading>
+            <Text size="sm">
+              O modelo precisa de pelo menos 50 municípios com 20 ou mais empresas de{" "}
+              {nomeSecao(setor)?.nome ?? setor}, além de população e PIB conhecidos. O
+              recorte atual não chega lá.
+            </Text>
+          </Stack>
+        </Card>
+      </Stack>
+    );
+  }
+
   const { vazios, amostra, r2, coeficientes } = resultado;
 
   /**
