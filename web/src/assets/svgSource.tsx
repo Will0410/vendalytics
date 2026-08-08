@@ -138,6 +138,24 @@ function IconTerritorio(): ReactNode {
   );
 }
 
+/**
+ * A lacuna, desenhada: três barras que existem e uma quarta que deveria
+ * existir. O tracejado é a única forma honesta de representar ausência —
+ * uma barra cheia num tom mais claro pareceria um dado a menos, não um
+ * dado que falta.
+ */
+function IconVazios(): ReactNode {
+  return (
+    <svg {...iconProps}>
+      <path d="M3 20h18" opacity="0.7" />
+      <path d="M5.5 20v-5.5M10 20v-8.5M19 20v-6.5" />
+      {/* O que deveria haver e não há. */}
+      <path d="M14.5 20V6" strokeDasharray="2.4 2.2" />
+      <path d="M12.6 8.2 14.5 6l1.9 2.2" opacity="0.75" />
+    </svg>
+  );
+}
+
 function IconPraca(): ReactNode {
   return (
     <svg {...iconProps}>
@@ -352,6 +370,7 @@ const NODES: Partial<Record<AssetId, () => ReactNode>> = {
   "icon.copiloto": IconCopiloto,
   "icon.mapa": IconMapa,
   "icon.territorio": IconTerritorio,
+  "icon.vazios": IconVazios,
   "icon.praca": IconPraca,
   "icon.prospeccao": IconProspeccao,
   "icon.usuarios": IconUsuarios,

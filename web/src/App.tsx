@@ -62,6 +62,7 @@ const carregar = <K extends string>(
 const InteligenciaVendas = carregar(() => import("./modules/InteligenciaVendas"), "InteligenciaVendas");
 const Copiloto = carregar(() => import("./modules/Copiloto"), "Copiloto");
 const Geomarketing = carregar(() => import("./modules/Geomarketing"), "Geomarketing");
+const VaziosDeMercado = carregar(() => import("./modules/VaziosDeMercado"), "VaziosDeMercado");
 const RelatorioPraca = carregar(() => import("./modules/RelatorioPraca"), "RelatorioPraca");
 const Prospeccao = carregar(() => import("./modules/Prospeccao"), "Prospeccao");
 const Enriquecimento = carregar(() => import("./modules/Enriquecimento"), "Enriquecimento");
@@ -195,6 +196,7 @@ export default function App() {
               {rotaEfetiva === "geomarketing" && <Geomarketing />}
               {rotaEfetiva === "mapa" && <MapaTerritorial />}
               {rotaEfetiva === "territorios" && <PlanejamentoTerritorio />}
+              {rotaEfetiva === "vazios" && <VaziosDeMercado />}
               {rotaEfetiva === "praca" && <RelatorioPraca />}
               {rotaEfetiva === "prospeccao" && <Prospeccao />}
               {rotaEfetiva === "enriquecimento" && <Enriquecimento />}

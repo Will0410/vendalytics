@@ -100,6 +100,18 @@ export const ASSETS = {
     height: 24,
     alt: "",
   }),
+  "icon.vazios": spec({
+    id: "icon.vazios",
+    kind: "icon",
+    prompt:
+      "Ícone de linha para 'Vazios de Mercado': três barras sólidas e uma " +
+      "quarta apenas contornada em tracejado, mais alta que as demais — a " +
+      "altura que deveria existir e não existe. Traço 1.5px, cantos " +
+      "arredondados, monocromático, grade 24x24, estilo enterprise.",
+    width: 24,
+    height: 24,
+    alt: "",
+  }),
   "icon.praca": spec({
     id: "icon.praca",
     kind: "icon",
