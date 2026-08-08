@@ -6,7 +6,14 @@
  * navegação e os filtros continuam de pé, e o usuário troca de módulo em vez
  * de dar F5.
  */
-import { Component, Suspense, lazy, type ErrorInfo, type ReactNode } from "react";
+import {
+  Component,
+  Suspense,
+  lazy,
+  type ComponentType,
+  type ErrorInfo,
+  type ReactNode,
+} from "react";
 import { styled } from "./stitches.config";
 import { Header } from "./components/Header";
 import { Sidebar } from "./components/Sidebar";
@@ -17,42 +24,52 @@ import { useRota } from "./app/rotas";
 import { useSessao } from "./app/sessao";
 import { Login } from "./components/Login";
 import { Asset } from "./assets/AssetProvider";
-import { InteligenciaVendas } from "./modules/InteligenciaVendas";
-import { Copiloto } from "./modules/Copiloto";
-import { Geomarketing } from "./modules/Geomarketing";
-import { RelatorioPraca } from "./modules/RelatorioPraca";
-import { Prospeccao } from "./modules/Prospeccao";
-import { Enriquecimento } from "./modules/Enriquecimento";
-import { Usuarios } from "./modules/Usuarios";
 
-/**
- * O Mapa Territorial entra por import dinâmico.
+/* ─── Módulos: todos por import dinâmico ───────────────────────────────────
  *
- * Ele arrasta Leaflet + markercluster + os 161KB de centroides — sozinho,
- * dobrava o bundle inicial. Seis dos sete módulos não desenham mapa nenhum, e
- * quem abre o painel de Vendas não deveria pagar por isso. O `<Suspense>` que
- * já envolve o conteúdo cuida do estado de carregamento.
+ * O usuário aterrissa em UM módulo. Estáticos, os nove desciam sempre, e as
+ * bibliotecas pesadas vinham junto mesmo para quem nunca abriria a tela que
+ * as usa:
+ *
+ *   Recharts (+ lodash, d3, decimal.js-light) .. 36% do bundle, 4 módulos usam
+ *   Leaflet (+ markercluster, centroides) ...... 2 módulos usam
+ *   Usuarios ................................... só admin abre
+ *
+ * Medido no bundle anterior: 756KB, dos quais ~900KB de fonte não-minificada
+ * eram Recharts e suas dependências exclusivas — o app não importa lodash nem
+ * d3 em lugar nenhum, elas entram de carona.
+ *
+ * Isso é seguro por causa da porta de login logo abaixo: enquanto a pessoa
+ * digita a senha, os chunks do módulo inicial já estão descendo. Não há
+ * cascata visível — e sem a porta haveria, o que é o motivo de esta decisão
+ * não se aplicar a qualquer app.
+ *
+ * O `<Suspense>` que já envolve o conteúdo cuida do estado de carregamento.
+ *
+ * Cuidado ao mexer: um único `import` estático de módulo aqui em cima desfaz
+ * tudo. Foi o que aconteceu quando o Planejamento de Território entrou
+ * estático — 721KB viraram 1,12MB e o chunk do mapa caiu para 9KB, porque não
+ * sobrou nada nele para separar.
  */
-const MapaTerritorial = lazy(() =>
-  import("./modules/MapaTerritorial").then((m) => ({ default: m.MapaTerritorial })),
-);
+/* A FUNÇÃO é obrigatória: `import(...)` avaliado aqui dispararia na carga do
+   módulo, os nove chunks desceriam juntos e o `Usuarios` voltaria a descer
+   para quem não é admin. Adiada, cada um só sai quando a rota pede. */
+const carregar = <K extends string>(
+  abrir: () => Promise<Record<K, ComponentType>>,
+  chave: K,
+) => lazy(() => abrir().then((m) => ({ default: m[chave] })));
 
-/**
- * O Planejamento de Território TAMBÉM precisa ser dinâmico.
- *
- * Ele importa `MapaBrasil` e os centroides. Estático, arrasta Leaflet +
- * markercluster + 161KB de coordenadas para o bundle principal e anula o
- * code-splitting do módulo acima — foi o que aconteceu quando ele entrou:
- * 721KB viraram 1,12MB e o chunk do mapa caiu para 9KB, porque não sobrou
- * nada nele para separar.
- *
- * Com os dois dinâmicos, o Leaflet vira um chunk compartilhado que só desce
- * para quem abre um mapa de verdade.
- */
-const PlanejamentoTerritorio = lazy(() =>
-  import("./modules/PlanejamentoTerritorio").then((m) => ({
-    default: m.PlanejamentoTerritorio,
-  })),
+const InteligenciaVendas = carregar(() => import("./modules/InteligenciaVendas"), "InteligenciaVendas");
+const Copiloto = carregar(() => import("./modules/Copiloto"), "Copiloto");
+const Geomarketing = carregar(() => import("./modules/Geomarketing"), "Geomarketing");
+const RelatorioPraca = carregar(() => import("./modules/RelatorioPraca"), "RelatorioPraca");
+const Prospeccao = carregar(() => import("./modules/Prospeccao"), "Prospeccao");
+const Enriquecimento = carregar(() => import("./modules/Enriquecimento"), "Enriquecimento");
+const Usuarios = carregar(() => import("./modules/Usuarios"), "Usuarios");
+const MapaTerritorial = carregar(() => import("./modules/MapaTerritorial"), "MapaTerritorial");
+const PlanejamentoTerritorio = carregar(
+  () => import("./modules/PlanejamentoTerritorio"),
+  "PlanejamentoTerritorio",
 );
 
 const Shell = styled("div", {
