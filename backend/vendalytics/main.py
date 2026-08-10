@@ -29,10 +29,10 @@ from .integracoes.salesforce_real import SalesforceConnector
 from .integracoes.whapi_real import WhapiMessagingConnector
 from .sources import bizdata_real, ibge_real, mercado_externo, rfb_real
 from .modules import (agente, analise_ia, comite, comunicacao_kpi,
-                      contactabilidade, executivo, field, fila, geo,
-                      identidade, mapa, mercado, metrics, mix, orquestrador,
-                      recompra, relatorio, reputacao, semantico, territorio,
-                      usuarios)
+                      contactabilidade, executivo, experimento, field, fila,
+                      geo, identidade, mapa, mercado, metrics, mix,
+                      orquestrador, recompra, relatorio, reputacao, semantico,
+                      territorio, usuarios)
 
 telemetry.configurar_logging(logging.INFO, json_logs=not config.DEMO_MODE)
 log = logging.getLogger("vendalytics")
@@ -285,6 +285,47 @@ def ia_agente(body: AgenteReq, user: dict = Depends(auth.get_current_user)):
     endpoint só empresta a credencial da Groq e repassa o turno.
     """
     return analise_ia.conversar(mensagens=body.mensagens, ferramentas=body.ferramentas)
+
+
+# ── experimento: o laço de retorno ────────────────────────────────────
+class ExibicaoReq(BaseModel):
+    modulo: str
+    itens: list[dict]
+
+
+@app.post("/api/experimento/exibicoes")
+def experimento_exibicoes(body: ExibicaoReq, user: dict = Depends(auth.get_current_user)):
+    """Registra as praças que um ranking mostrou, com o braço de cada uma.
+
+    Em lote de propósito: uma chamada por praça exibida seria dezenas de
+    requisições por tela aberta.
+    """
+    return experimento.registrar_exibicao(body.itens, body.modulo)
+
+
+class DesfechoPracaReq(BaseModel):
+    municipio: int
+    setor: str
+    tipo: str
+    valor: float | None = None
+    motivo: str = ""
+
+
+@app.post("/api/experimento/desfechos")
+def experimento_desfecho(body: DesfechoPracaReq, user: dict = Depends(auth.get_current_user)):
+    """Registra visita, proposta, ganho ou perda de uma praça.
+
+    Aceita praça de QUALQUER braço — inclusive controle. Sem o desfecho do
+    controle não há com o que comparar.
+    """
+    return experimento.registrar_desfecho(
+        body.municipio, body.setor, body.tipo, body.valor, body.motivo)
+
+
+@app.get("/api/experimento/resumo")
+def experimento_resumo(setor: str = "", user: dict = Depends(auth.get_current_user)):
+    """Quanto já se acumulou em cada braço, e se dá para medir alguma coisa."""
+    return experimento.resumo(setor)
 
 
 @app.get("/api/ia/status")

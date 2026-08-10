@@ -13,9 +13,10 @@
  * O método, a validação e o que ele não cobre estão em `domain/ecossistema.ts`
  * e em `docs/espaco-de-atividades.md`.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { cargaNacional } from "../data/ibge";
 import { useAsync } from "../lib/useAsync";
+import { registrarExibicoes } from "../data/api";
 import { num } from "../lib/format";
 import {
   AUC_MINIMO,
@@ -61,6 +62,31 @@ export function Ecossistema() {
     () => (habilitado ? calcularProntidao(indice) : null),
     [habilitado, indice],
   );
+
+  /* Instrumentação: o que a tela mostrou fica registrado, com o braço de
+     experimento, porque nenhuma medição de efeito faz sentido sem isso.
+
+     Os hooks ficam AQUI, antes de qualquer `return` antecipado. Eu os havia
+     colocado no meio do corpo, depois das guardas de "divisão não validada" e
+     "carregando" — trocar de uma divisão validada para uma reprovada mudava a
+     quantidade de hooks entre renders e o React derrubava a tela. */
+  const jaRegistrado = useRef("");
+  useEffect(() => {
+    if (!resultado) return;
+    const topo = resultado.prontos.slice(0, NO_RANKING);
+    const chave = `${resultado.divisao.codigo}:${topo.map((x) => x.municipioId).join(",")}`;
+    if (chave === jaRegistrado.current) return;
+    jaRegistrado.current = chave;
+    registrarExibicoes(
+      "ecossistema",
+      topo.map((x, i) => ({
+        municipio: x.municipioId,
+        setor: resultado.divisao.codigo,
+        posicao: i + 1,
+        score: Math.round(x.prontidao * 100),
+      })),
+    );
+  }, [resultado]);
 
   const seletor = (
     <Stack gap={2} css={{ maxWidth: 620 }}>

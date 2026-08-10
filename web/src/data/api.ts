@@ -255,3 +255,64 @@ export function conversarComAgente(
     corpo: { mensagens, ferramentas },
   });
 }
+
+/* ─── Experimento: o laço de retorno ───────────────────────────────────── */
+
+export interface ExibicaoPraca {
+  municipio: number;
+  setor: string;
+  posicao: number;
+  score?: number;
+}
+
+/**
+ * Registra as praças que um ranking mostrou.
+ *
+ * Em lote e sem `await` do lado de quem chama: instrumentação que atrasa a
+ * tela é instrumentação que alguém remove na primeira reclamação de lentidão.
+ * Falha em silêncio pelo mesmo motivo — perder um registro é ruim, derrubar o
+ * módulo por causa dele é pior.
+ */
+export function registrarExibicoes(modulo: string, itens: ExibicaoPraca[]): void {
+  if (itens.length === 0) return;
+  void requisitar("/api/experimento/exibicoes", {
+    metodo: "POST",
+    corpo: { modulo, itens: itens.slice(0, 500) },
+  }).catch(() => {});
+}
+
+/** Vocabulário da tabela de desfechos — o mesmo que `fila.py` já consome. */
+export type TipoDesfecho = "aceita" | "recusada" | "ganhou" | "perdeu" | "ignorada";
+
+/**
+ * Registra o que aconteceu com uma praça.
+ *
+ * Vale para QUALQUER praça, inclusive as do braço de controle: sem o desfecho
+ * do controle não há com o que comparar depois.
+ */
+export function registrarDesfecho(
+  municipio: number,
+  setor: string,
+  tipo: TipoDesfecho,
+  motivo = "",
+): Promise<{ ok: boolean; braco: string }> {
+  return requisitar("/api/experimento/desfechos", {
+    metodo: "POST",
+    corpo: { municipio, setor, tipo, motivo },
+  });
+}
+
+export interface ResumoExperimento {
+  setor: string;
+  fracao_controle: number;
+  exibicoes: Record<string, { registros: number; pracas: number }>;
+  desfechos: Record<string, number>;
+  por_braco: Record<string, { desfechos: number; ganhos: number; taxa_ganho: number | null }>;
+  pronto_para_medir: boolean;
+  faltam_no_menor_braco: number;
+}
+
+export function resumoExperimento(setor = ""): Promise<ResumoExperimento> {
+  const q = setor ? `?setor=${encodeURIComponent(setor)}` : "";
+  return requisitar<ResumoExperimento>(`/api/experimento/resumo${q}`);
+}

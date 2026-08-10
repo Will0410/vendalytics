@@ -12,10 +12,11 @@
  * `domain/vazios.ts` — e a tela repete os números principais, porque um
  * indicador preditivo sem a acurácia ao lado vira promessa.
  */
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { SECOES } from "../data/cnae";
 import { useFiltros } from "../app/filtros";
 import { useUniverso } from "../app/useUniverso";
+import { registrarExibicoes } from "../data/api";
 import { num, numCompacto } from "../lib/format";
 import { mapearVazios, validadoPara, SETORES_VALIDADOS } from "../domain/vazios";
 import { BarrasHorizontais, Dispersao, MolduraGrafico } from "../components/charts";
@@ -61,6 +62,37 @@ export function VaziosDeMercado() {
       })),
     );
   }, [habilitado, universo.pracas]);
+
+  /* Instrumentação: registra o que a tela mostrou, com o braço de
+     experimento. É o que permite, meses depois, separar "a praça cresceu
+     porque atuamos" de "cresceu de qualquer jeito".
+
+     Os hooks ficam ANTES dos `return` antecipados. Eu os havia colocado no
+     meio do corpo, e trocar para um setor não validado mudava a quantidade de
+     hooks entre renders — o React derruba a tela nesse caso.
+
+     Sem `await` e sem bloquear o render: instrumentação que atrasa a tela é
+     instrumentação que alguém remove na primeira reclamação de lentidão. */
+  const jaRegistrado = useRef("");
+  useEffect(() => {
+    if (!resultado) return;
+    const lista = resultado.vazios
+      .filter((v) => v.sustentavel)
+      .sort((a, b) => b.lacuna - a.lacuna)
+      .slice(0, NO_RANKING);
+    const chave = `${setor}:${lista.map((v) => v.id).join(",")}`;
+    if (chave === jaRegistrado.current) return;
+    jaRegistrado.current = chave;
+    registrarExibicoes(
+      "vazios",
+      lista.map((v, i) => ({
+        municipio: v.id,
+        setor,
+        posicao: i + 1,
+        score: Math.round(v.lacuna),
+      })),
+    );
+  }, [setor, resultado]);
 
   /* ─── Setor sem validação ──────────────────────────────────────────────
      Esta é a decisão de produto mais importante do módulo. O modelo roda em

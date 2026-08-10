@@ -222,6 +222,36 @@ describe("Vazios de Mercado", () => {
     expect(screen.getByText(/Setores validados/i)).toBeInTheDocument();
   });
 
+  /* REGRESSÃO — regras de hooks.
+     A instrumentação do experimento entrou com `useRef`/`useEffect` DEPOIS das
+     guardas de "setor não validado" e "carregando". Trocar de um setor
+     validado para um reprovado mudava a quantidade de hooks entre renders, e o
+     React derruba a árvore inteira nesse caso. Os testes de então não pegaram
+     porque nenhum deles trocava de setor com o módulo montado. */
+  it("sobrevive à troca de setor validado para reprovado", async () => {
+    const usuario = userEvent.setup();
+    window.location.hash = "#/vazios?uf=SP&cnae=G";
+
+    const { rerender } = renderizar(
+      <StrictMode>
+        <VaziosDeMercado />
+      </StrictMode>,
+    );
+    await screen.findByText(/Dados insuficientes|Onde ir primeiro/i, {}, { timeout: 5000 });
+
+    window.location.hash = "#/vazios?uf=SP&cnae=F";
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    rerender(
+      <StrictMode>
+        <VaziosDeMercado />
+      </StrictMode>,
+    );
+
+    expect(await screen.findByText(/não foi validado/i)).toBeInTheDocument();
+    expect(screen.queryByText(/falhou ao renderizar/i)).not.toBeInTheDocument();
+    void usuario;
+  });
+
   it("diz que faltou dado em vez de mostrar zeros", async () => {
     /* O mock tem 5 municípios e o modelo exige 50. Sem este ramo a tela
        mostrava "0 municípios", "0,0% da variação" e elasticidades "0,00" numa

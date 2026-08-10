@@ -368,6 +368,38 @@ MIGRATIONS: list[tuple[int, str, str]] = [
         CREATE INDEX IF NOT EXISTS idx_relatorios_tempo ON relatorios_executivos(tenant_id, gerado_em);
         """,
     ),
+    (
+        11,
+        "experimento_recomendacoes",
+        """
+        -- Só `recomendacoes`. Os DESFECHOS reaproveitam a tabela genérica que
+        -- existe desde a migration 3 (`sujeito_tipo`/`sujeito_id`), que já é
+        -- lida por `infra/scores.py` e alimenta o modelo de propensão. Criar
+        -- uma segunda tabela de desfechos partiria o loop fechado em dois, e
+        -- o `CREATE TABLE IF NOT EXISTS` teria feito isso EM SILÊNCIO — a
+        -- tabela antiga vence e o INSERT novo falha só em tempo de execução.
+
+        -- Toda praça que o produto MOSTROU num ranking, com o braço sorteado.
+        -- Sem este registro nao ha como, depois, separar "cresceu porque
+        -- visitamos" de "cresceu de qualquer jeito" — que e a unica pergunta
+        -- que um diretor financeiro faz.
+        CREATE TABLE IF NOT EXISTS recomendacoes (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            tenant_id  TEXT NOT NULL,
+            municipio  INTEGER NOT NULL,
+            setor      TEXT NOT NULL,
+            modulo     TEXT NOT NULL,
+            posicao    INTEGER NOT NULL,
+            score      REAL,
+            braco      TEXT NOT NULL CHECK (braco IN ('tratado','controle')),
+            usuario    TEXT NOT NULL,
+            criado_em  TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_reco_praca ON recomendacoes(tenant_id, municipio, setor);
+        CREATE INDEX IF NOT EXISTS idx_reco_tempo ON recomendacoes(tenant_id, criado_em);
+
+        """,
+    ),
 ]
 
 
@@ -610,6 +642,22 @@ MIGRATIONS_POSTGRES: list[tuple[int, str, str]] = [
             dados      TEXT NOT NULL DEFAULT '{}'
         );
         CREATE INDEX IF NOT EXISTS idx_relatorios_tempo ON relatorios_executivos(tenant_id, gerado_em);
+    """),
+    (11, "experimento_recomendacoes", """
+        CREATE TABLE IF NOT EXISTS recomendacoes (
+            id         INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+            tenant_id  TEXT NOT NULL,
+            municipio  INTEGER NOT NULL,
+            setor      TEXT NOT NULL,
+            modulo     TEXT NOT NULL,
+            posicao    INTEGER NOT NULL,
+            score      DOUBLE PRECISION,
+            braco      TEXT NOT NULL CHECK (braco IN ('tratado','controle')),
+            usuario    TEXT NOT NULL,
+            criado_em  TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_reco_praca ON recomendacoes(tenant_id, municipio, setor);
+        CREATE INDEX IF NOT EXISTS idx_reco_tempo ON recomendacoes(tenant_id, criado_em);
     """),
 ]
 
