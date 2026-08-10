@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Vendalytics — abertura</title>
+<style>
+  :root {
+    --fundo: #07090d;
+    --tinta: #f2f5fa;
+    --tinta-2: #93a1b5;
+    --tinta-3: #5a6678;
+    --ciano: #22d3ee;
+    --indigo: #6d84ff;
+    --verde: #45d17a;
+    --ambar: #f0a93b;
+    --sans: "Segoe UI", ui-sans-serif, -apple-system, Roboto, sans-serif;
+    --mono: "Cascadia Mono", Consolas, "SF Mono", ui-monospace, monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 1920px; height: 1080px;
+    background: var(--fundo);
+    color: var(--tinta);
+    font-family: var(--sans);
+    overflow: hidden;
+  }
+
+  /* ── Ambiente ────────────────────────────────────────────────────────── */
+
+  .grade {
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(255,255,255,0.022) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,0.022) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(ellipse 90% 70% at 50% 40%, #000 30%, transparent 78%);
+  }
+
+  .brilho {
+    position: fixed; left: 50%; top: -34%;
+    width: 1500px; height: 1100px; transform: translateX(-50%);
+    background: radial-gradient(ellipse at center,
+      rgba(79,110,247,0.20) 0%, rgba(34,211,238,0.09) 34%, transparent 66%);
+    filter: blur(24px);
+  }
+
+  .vinheta {
+    position: fixed; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse 78% 62% at 50% 48%, transparent 42%, rgba(0,0,0,0.62) 100%);
+  }
+
+  .progresso {
+    position: fixed; left: 0; bottom: 0; height: 4px; width: 0;
+    background: linear-gradient(90deg, var(--indigo), var(--ciano));
+    box-shadow: 0 0 16px rgba(34,211,238,0.55);
+    z-index: 40;
+  }
+
+  .marca-rodape {
+    position: fixed; right: 46px; bottom: 34px; z-index: 30;
+    font-family: var(--mono); font-size: 15px; letter-spacing: 0.3em;
+    text-transform: uppercase; color: var(--tinta-3);
+    opacity: 0; transition: opacity .8s ease;
+  }
+  .marca-rodape.on { opacity: 1; }
+
+  /* ── Cenas ───────────────────────────────────────────────────────────── */
+
+  .cena {
+    position: fixed; inset: 0; z-index: 10;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 30px; padding: 0 130px;
+    opacity: 0; visibility: hidden;
+    transition: opacity .62s cubic-bezier(.22,.61,.36,1);
+  }
+  .cena.on { opacity: 1; visibility: visible; }
+
+  .sobe { transform: translateY(26px); opacity: 0;
+          transition: transform .78s cubic-bezier(.22,.61,.36,1), opacity .78s ease; }
+  .cena.on .sobe { transform: translateY(0); opacity: 1; }
+  .cena.on .d1 { transition-delay: .10s } .cena.on .d2 { transition-delay: .22s }
+  .cena.on .d3 { transition-delay: .34s } .cena.on .d4 { transition-delay: .46s }
+  .cena.on .d5 { transition-delay: .58s } .cena.on .d6 { transition-delay: .70s }
+
+  .etiqueta {
+    font-family: var(--mono); font-size: 17px; letter-spacing: 0.42em;
+    text-transform: uppercase; color: var(--ciano);
+  }
+  .etiqueta.neutra { color: var(--tinta-3); }
+
+  h1 { font-size: 126px; font-weight: 800; letter-spacing: -0.045em; line-height: 1; }
+  h2 { font-size: 74px; font-weight: 700; letter-spacing: -0.032em;
+       line-height: 1.08; text-align: center; max-width: 1500px; }
+  h3 { font-size: 44px; font-weight: 650; letter-spacing: -0.022em; }
+
+  .apoio { font-size: 27px; color: var(--tinta-2); line-height: 1.5;
+           text-align: center; max-width: 1080px; }
+
+  .regua { width: 148px; height: 3px; border-radius: 2px;
+           background: linear-gradient(90deg, var(--indigo), var(--ciano)); }
+
+  .ac { color: var(--ciano); }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+  /* ── Contadores ──────────────────────────────────────────────────────── */
+
+  .contadores { display: flex; gap: 130px; align-items: flex-start; }
+  .contador { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+  .contador .v { font-family: var(--mono); font-size: 108px; font-weight: 600;
+                 letter-spacing: -0.04em; font-variant-numeric: tabular-nums; line-height: 1; }
+  .contador .r { font-family: var(--mono); font-size: 15px; letter-spacing: 0.26em;
+                 text-transform: uppercase; color: var(--tinta-3); text-align: center; }
+
+  /* ── Lacuna (Vazios) ─────────────────────────────────────────────────── */
+
+  .lacuna { width: 1180px; display: flex; flex-direction: column; gap: 22px; }
+  .barra-linha { display: grid; grid-template-columns: 210px 1fr 190px;
+                 align-items: center; gap: 26px; }
+  .barra-linha .rot { font-family: var(--mono); font-size: 17px; letter-spacing: 0.14em;
+                      text-transform: uppercase; color: var(--tinta-3); text-align: right; }
+  .trilho { height: 46px; background: rgba(255,255,255,0.045); border-radius: 4px; overflow: hidden; }
+  .preenche { height: 100%; width: 0; border-radius: 4px;
+              transition: width 1.5s cubic-bezier(.22,.61,.36,1); }
+  .preenche.obs { background: linear-gradient(90deg, #2a3a5c, #40598f); }
+  .preenche.esp { background: linear-gradient(90deg, rgba(34,211,238,0.16), rgba(34,211,238,0.34));
+                  border: 1px dashed rgba(34,211,238,0.75); }
+  .barra-linha .val { font-family: var(--mono); font-size: 30px; font-variant-numeric: tabular-nums; }
+
+  .selo-lacuna {
+    margin-top: 6px; align-self: center;
+    font-family: var(--mono); font-size: 34px; color: var(--ciano);
+    letter-spacing: 0.06em;
+    padding: 12px 30px; border: 1px dashed rgba(34,211,238,0.5); border-radius: 8px;
+    background: rgba(34,211,238,0.06);
+  }
+
+  /* ── Decis ───────────────────────────────────────────────────────────── */
+
+  .decis { display: flex; align-items: flex-end; gap: 13px; height: 300px; }
+  .decis .col { width: 76px; display: flex; flex-direction: column;
+                align-items: center; justify-content: flex-end; gap: 12px; height: 100%; }
+  .decis .haste { width: 100%; height: 0; border-radius: 3px 3px 0 0;
+                  transition: height 1.15s cubic-bezier(.22,.61,.36,1); }
+  .decis .leg { font-family: var(--mono); font-size: 14px; color: var(--tinta-3); }
+
+  /* ── Rede (Ecossistema) ──────────────────────────────────────────────── */
+
+  .rede { position: relative; width: 940px; height: 430px; }
+  .rede svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .no {
+    position: absolute; transform: translate(-50%,-50%);
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    opacity: 0; transition: opacity .6s ease;
+  }
+  .no.on { opacity: 1; }
+  .no .bolha { width: 92px; height: 92px; border-radius: 50%;
+               display: flex; align-items: center; justify-content: center;
+               font-family: var(--mono); font-size: 27px; font-weight: 600; }
+  .no.tem .bolha { background: rgba(109,132,255,0.17); border: 2px solid var(--indigo); color: #b9c4ff; }
+  .no.falta .bolha { border: 2px dashed var(--ciano); color: var(--ciano);
+                     background: rgba(34,211,238,0.05); }
+  .no .cap { font-family: var(--mono); font-size: 14px; letter-spacing: 0.1em;
+             color: var(--tinta-3); text-transform: uppercase; white-space: nowrap; }
+  .no.falta .cap { color: var(--ciano); }
+  .aresta { stroke: rgba(109,132,255,0.42); stroke-width: 2;
+            stroke-dasharray: 400; stroke-dashoffset: 400;
+            transition: stroke-dashoffset 1s ease; }
+  .aresta.on { stroke-dashoffset: 0; }
+  .aresta.alvo { stroke: rgba(34,211,238,0.68); stroke-dasharray: 7 7; }
+
+  /* ── Descartadas ─────────────────────────────────────────────────────── */
+
+  .mortas { display: flex; flex-direction: column; gap: 26px; width: 1280px; }
+  .morta {
+    display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 40px;
+    padding: 26px 34px; border-left: 3px solid var(--ambar);
+    background: rgba(240,169,59,0.055); border-radius: 0 8px 8px 0;
+    position: relative; overflow: hidden;
+  }
+  .morta .t { font-size: 31px; font-weight: 600; }
+  .morta .m { font-family: var(--mono); font-size: 23px; color: var(--ambar); white-space: nowrap; }
+  .morta::after {
+    content: ""; position: absolute; left: 34px; right: 34px; top: 50%;
+    height: 2px; background: rgba(240,169,59,0.85); width: 0;
+    transition: width .9s cubic-bezier(.22,.61,.36,1);
+  }
+  .cena.on .morta.riscada::after { width: calc(100% - 68px); }
+
+  /* ── Placar final ────────────────────────────────────────────────────── */
+
+  .placar { display: flex; gap: 96px; }
+  .placar .item { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .placar .n { font-family: var(--mono); font-size: 82px; font-weight: 600;
+               letter-spacing: -0.03em; }
+  .placar .l { font-family: var(--mono); font-size: 15px; letter-spacing: 0.22em;
+               text-transform: uppercase; color: var(--tinta-3); text-align: center; }
+</style>
+</head>
+<body>
+  <div class="grade"></div>
+  <div class="brilho"></div>
+  <div class="vinheta"></div>
+  <div class="progresso" id="progresso"></div>
+  <div class="marca-rodape" id="rodape">Vendalytics</div>
+
+  <!-- 1 · Marca -->
+  <section class="cena" id="c1">
+    <h1 class="sobe d1">Vendalytic<span class="ac">s</span></h1>
+    <div class="regua sobe d2"></div>
+    <div class="etiqueta neutra sobe d3">Inteligência de vendas sobre dados públicos</div>
+  </section>
+
+  <!-- 2 · Escala -->
+  <section class="cena" id="c2">
+    <div class="etiqueta sobe d1">A base</div>
+    <div class="contadores sobe d2">
+      <div class="contador"><div class="v ac" id="n-mun">0</div><div class="r">municípios<br>do Brasil</div></div>
+      <div class="contador"><div class="v" id="n-emp">0</div><div class="r">empresas<br>formalizadas</div></div>
+      <div class="contador"><div class="v" id="n-cnae">0</div><div class="r">divisões<br>da CNAE</div></div>
+    </div>
+    <div class="apoio sobe d4">Direto do IBGE, a cada carregamento. Sem base intermediária, sem dado sintético.</div>
+  </section>
+
+  <!-- 3 · O problema -->
+  <section class="cena" id="c3">
+    <div class="etiqueta sobe d1">O problema</div>
+    <h2 class="sobe d2">Todo geomarketing conta o que <span class="ac">já existe</span>.</h2>
+    <div class="apoio sobe d3">Ranking de volume leva a operação para São Paulo — e para por aí.
+      A pergunta que gera visita é outra: onde o mercado ainda não está,
+      mas as condições para ele existir já estão.</div>
+  </section>
+
+  <!-- 4 · Vazios -->
+  <section class="cena" id="c4">
+    <div class="etiqueta sobe d1">Modelo 1 · Vazios de mercado</div>
+    <h3 class="sobe d2">Rio de Janeiro — comércio</h3>
+    <div class="lacuna sobe d3">
+      <div class="barra-linha">
+        <div class="rot">Observado</div>
+        <div class="trilho"><div class="preenche obs" id="b-obs"></div></div>
+        <div class="val num">73.824</div>
+      </div>
+      <div class="barra-linha">
+        <div class="rot">Esperado</div>
+        <div class="trilho"><div class="preenche esp" id="b-esp"></div></div>
+        <div class="val num ac">115.930</div>
+      </div>
+      <div class="selo-lacuna">lacuna de 42.106 empresas</div>
+    </div>
+    <div class="apoio sobe d5">Quantas empresas o município deveria ter, dado porte e poder de compra.</div>
+  </section>
+
+  <!-- 5 · Validação -->
+  <section class="cena" id="c5">
+    <div class="etiqueta sobe d1">Validado fora da amostra</div>
+    <h2 class="sobe d2" style="font-size:56px">Ajuste em <span class="num">2013</span>,
+      conferido contra <span class="num ac">2015–2020</span></h2>
+    <div class="decis sobe d3" id="decis"></div>
+    <div class="apoio sobe d5">Crescimento médio por decil da lacuna.
+      <span class="ac">18,6 pontos</span> separam o primeiro do último — com o modelo ajustado dois anos antes.</div>
+  </section>
+
+  <!-- 6 · Ecossistema -->
+  <section class="cena" id="c6">
+    <div class="etiqueta sobe d1">Modelo 2 · Ecossistema</div>
+    <h2 class="sobe d2" style="font-size:52px">Atividades surgem onde as
+      <span class="ac">capacidades vizinhas</span> já existem</h2>
+    <div class="rede sobe d3" id="rede">
+      <!-- As arestas param a 50px do centro do nó de destino (raio 46). Sem
+           isso a linha atravessa o círculo e risca o rótulo embaixo dele. -->
+      <svg viewBox="0 0 940 430" preserveAspectRatio="none">
+        <line class="aresta" x1="180" y1="120" x2="425" y2="200"></line>
+        <line class="aresta" x1="180" y1="330" x2="425" y2="232"></line>
+        <line class="aresta" x1="430" y1="60"  x2="462" y2="167"></line>
+        <line class="aresta alvo" x1="518" y1="215" x2="740" y2="215"></line>
+        <line class="aresta alvo" x1="466" y1="106" x2="744" y2="195"></line>
+      </svg>
+      <div class="no tem"   style="left:180px;top:120px"><div class="bolha">24</div><div class="cap">Metalurgia</div></div>
+      <div class="no tem"   style="left:180px;top:330px"><div class="bolha">22</div><div class="cap">Borracha e plástico</div></div>
+      <div class="no tem"   style="left:430px;top:60px"><div class="bolha">33</div><div class="cap">Manutenção de máquinas</div></div>
+      <div class="no tem"   style="left:470px;top:215px"><div class="bolha">29</div><div class="cap">Veículos</div></div>
+      <div class="no falta" style="left:790px;top:215px"><div class="bolha">28</div><div class="cap">Fabricação de máquinas</div></div>
+    </div>
+  </section>
+
+  <!-- 7 · Descartadas -->
+  <section class="cena" id="c7">
+    <div class="etiqueta sobe d1" style="color:var(--ambar)">O que não entrou</div>
+    <div class="mortas">
+      <div class="morta sobe d2 riscada"><div class="t">Satélite como indicador antecedente</div>
+        <div class="m">a contemporânea venceu</div></div>
+      <div class="morta sobe d3 riscada"><div class="t">Redistribuição de demanda por gravidade</div>
+        <div class="m">+0,007 · dentro do ruído</div></div>
+      <div class="morta sobe d4 riscada"><div class="t">A pergunta inversa do ecossistema</div>
+        <div class="m">degenerada</div></div>
+    </div>
+    <div class="apoio sobe d6">Três hipóteses medidas contra uma referência honesta — e descartadas.
+      As duas primeiras eram as minhas favoritas.</div>
+  </section>
+
+  <!-- 8 · Fecho -->
+  <section class="cena" id="c8">
+    <h1 class="sobe d1" style="font-size:96px">Vendalytic<span class="ac">s</span></h1>
+    <div class="regua sobe d2"></div>
+    <div class="placar sobe d3">
+      <div class="item"><div class="n ac">2</div><div class="l">modelos<br>validados</div></div>
+      <div class="item"><div class="n" style="color:var(--ambar)">3</div><div class="l">hipóteses<br>descartadas</div></div>
+      <div class="item"><div class="n">453</div><div class="l">testes<br>automatizados</div></div>
+    </div>
+    <div class="apoio sobe d5" style="margin-top:8px">Toda medida anda com a conta mais simples que responderia a mesma pergunta.</div>
+  </section>
+
+<script>
+/* ─────────────────────────────────────────────────────────────────────────
+   Roteiro. Cada cena declara quando entra e quanto dura; o resto é derivado,
+   então mudar uma duração não desalinha as seguintes nem a barra de progresso.
+   ───────────────────────────────────────────────────────────────────────── */
+const ROTEIRO = [
+  { id: "c1", dur: 7.0,  aoEntrar: null },
+  { id: "c2", dur: 12.0, aoEntrar: contar },
+  { id: "c3", dur: 10.0, aoEntrar: null },
+  { id: "c4", dur: 14.0, aoEntrar: barras },
+  { id: "c5", dur: 13.0, aoEntrar: decis },
+  { id: "c6", dur: 14.0, aoEntrar: rede },
+  { id: "c7", dur: 13.0, aoEntrar: null },
+  { id: "c8", dur: 9.0,  aoEntrar: null },
+];
+const TRANSICAO = 0.62;
+const TOTAL = ROTEIRO.reduce((s, c) => s + c.dur, 0);
+
+const espera = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/* Contagem com desaceleração — número que sobe linear parece contador de posto. */
+function subir(el, ate, ms, formatar) {
+  const t0 = performance.now();
+  const passo = (agora) => {
+    const t = Math.min((agora - t0) / ms, 1);
+    const suave = 1 - Math.pow(1 - t, 3);
+    el.textContent = formatar(Math.round(ate * suave));
+    if (t < 1) requestAnimationFrame(passo);
+  };
+  requestAnimationFrame(passo);
+}
+const br = (n) => n.toLocaleString("pt-BR");
+
+function contar() {
+  subir(document.getElementById("n-mun"), 5570, 2200, br);
+  subir(document.getElementById("n-emp"), 10607110, 2600, br);
+  subir(document.getElementById("n-cnae"), 87, 1800, br);
+}
+
+function barras() {
+  setTimeout(() => {
+    document.getElementById("b-obs").style.width = "63.7%";  /* 73.824 / 115.930 */
+    document.getElementById("b-esp").style.width = "100%";
+  }, 480);
+}
+
+function decis() {
+  const caixa = document.getElementById("decis");
+  if (caixa.dataset.pronto) return;
+  caixa.dataset.pronto = "1";
+  /* Valores reais medidos: crescimento médio 2015-2020 por decil da lacuna. */
+  const V = [0.6, -4.4, -7.4, -8.2, -9.9, -11.7, -12.6, -13.1, -15.8, -18.0];
+  const pior = Math.min(...V), melhor = Math.max(...V);
+  V.forEach((v, i) => {
+    const col = document.createElement("div"); col.className = "col";
+    const h = document.createElement("div"); h.className = "haste";
+    const frac = (v - pior) / (melhor - pior);
+    h.dataset.alvo = Math.round(28 + frac * 200) + "px";
+    h.style.background = i === 0
+      ? "linear-gradient(180deg,#22d3ee,#1b9fb4)"
+      : `linear-gradient(180deg, rgba(109,132,255,${0.85 - i * 0.055}), rgba(60,78,150,${0.7 - i * 0.05}))`;
+    const leg = document.createElement("div"); leg.className = "leg";
+    leg.textContent = (v > 0 ? "+" : "") + v.toFixed(1).replace(".", ",") + "%";
+    col.append(h, leg); caixa.append(col);
+  });
+  setTimeout(() => {
+    caixa.querySelectorAll(".haste").forEach((h, i) => {
+      setTimeout(() => { h.style.height = h.dataset.alvo; }, i * 75);
+    });
+  }, 420);
+}
+
+function rede() {
+  const nos = document.querySelectorAll("#rede .no");
+  const arestas = document.querySelectorAll("#rede .aresta");
+  /* As capacidades que já existem aparecem primeiro; o que falta entra por
+     último, que é a ordem em que o modelo raciocina. */
+  [0, 1, 2, 3].forEach((i, k) => setTimeout(() => nos[i].classList.add("on"), 380 + k * 260));
+  [0, 1, 2].forEach((i, k) => setTimeout(() => arestas[i].classList.add("on"), 900 + k * 260));
+  setTimeout(() => nos[4].classList.add("on"), 2300);
+  [3, 4].forEach((i, k) => setTimeout(() => arestas[i].classList.add("on"), 2500 + k * 220));
+}
+
+async function tocar() {
+  document.getElementById("rodape").classList.add("on");
+  const prog = document.getElementById("progresso");
+  prog.style.transition = `width ${TOTAL}s linear`;
+  requestAnimationFrame(() => { prog.style.width = "100%"; });
+
+  for (const cena of ROTEIRO) {
+    const el = document.getElementById(cena.id);
+    el.classList.add("on");
+    if (cena.aoEntrar) cena.aoEntrar();
+    await espera((cena.dur - TRANSICAO) * 1000);
+    el.classList.remove("on");
+    await espera(TRANSICAO * 1000);
+  }
+  window.__fim = true;
+}
+
+window.__tocar = tocar;
+window.__duracao = TOTAL;
+</script>
+</body>
+</html>
