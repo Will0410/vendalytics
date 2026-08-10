@@ -17,6 +17,7 @@
  *   • **legenda a partir de 2 séries**; com uma série o título já a nomeia.
  */
 import type { ReactNode } from "react";
+import { duracaoGrafico } from "../lib/movimento";
 import {
   Bar,
   BarChart,
@@ -227,7 +228,20 @@ export function BarrasHorizontais({
             <ConteudoTooltip formatar={formatar} rotuloDe={detalheTooltip} /> as unknown as never
           }
         />
-        <Bar dataKey="valor" name="Empresas" radius={[0, 4, 4, 0]} maxBarSize={18} isAnimationActive={false}>
+        <Bar
+          dataKey="valor"
+          name="Empresas"
+          radius={[0, 4, 4, 0]}
+          maxBarSize={18}
+          /* Cresce da base. Duração 0 quando o usuário pediu menos movimento —
+             o que é diferente de `isAnimationActive={false}`: com duração zero
+             o gráfico ainda passa pelo ciclo e chega ao estado final no
+             primeiro quadro, sem o salto que o desligamento total provoca ao
+             reidratar. */
+          isAnimationActive
+          animationDuration={duracaoGrafico(700)}
+          animationEasing="ease-out"
+        >
           {dados.map((d, i) => (
             <Cell
               key={i}
@@ -288,7 +302,9 @@ export function BarrasVerticais({
             fill={SERIES[s.slot % SERIES.length]}
             radius={[4, 4, 0, 0]}
             maxBarSize={30}
-            isAnimationActive={false}
+            isAnimationActive
+            animationDuration={duracaoGrafico(650)}
+            animationEasing="ease-out"
           />
         ))}
       </BarChart>
@@ -387,7 +403,12 @@ export function Dispersao({
             ) as unknown as never
           }
         />
-        <Scatter data={dados} fill={SERIES[0]} isAnimationActive={false}>
+        <Scatter
+          data={dados}
+          fill={SERIES[0]}
+          isAnimationActive
+          animationDuration={duracaoGrafico(600)}
+        >
           {dados.map((d, i) => (
             <Cell
               key={i}
@@ -463,7 +484,8 @@ export function AreaAcumulada({
           stroke={SERIES[0]}
           strokeWidth={2}
           fill="url(#va-area)"
-          isAnimationActive={false}
+          isAnimationActive
+          animationDuration={duracaoGrafico(700)}
           dot={false}
         />
       </AreaChart>

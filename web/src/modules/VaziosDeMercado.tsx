@@ -232,6 +232,7 @@ export function VaziosDeMercado() {
         <CardKpi
           rotulo="Lacunas sustentáveis"
           valor={num(sustentaveis)}
+          contar={{ de: sustentaveis, formatar: num }}
           nota={`de ${num(amostra)} municípios — o resto cabe no intervalo`}
           destaque
         />

@@ -8,6 +8,7 @@
  */
 import type { ReactNode } from "react";
 import { styled } from "../stitches.config";
+import { useContagem } from "../lib/movimento";
 import { useBackdrop } from "../assets/AssetProvider";
 import type { AssetId } from "../assets/catalog";
 import type { Insight } from "../domain/insights";
@@ -26,9 +27,31 @@ const CorpoKpi = styled(Card, {
   justifyContent: "space-between",
 });
 
+/**
+ * O número subindo até o valor.
+ *
+ * É componente separado e não hook dentro do `CardKpi` por um motivo de
+ * regra: `contar` é opcional, e chamar `useContagem` só quando ele existe
+ * seria hook condicional — o React derruba a árvore quando a contagem de
+ * hooks muda entre renders. Aqui o hook roda sempre; o que varia é se o
+ * resultado é usado.
+ */
+function ValorAnimado({
+  valor,
+  contar,
+}: {
+  valor: string;
+  contar?: { de: number; formatar: (v: number) => string };
+}) {
+  const corrente = useContagem(contar?.de ?? 0);
+  if (!contar) return <>{valor}</>;
+  return <>{contar.formatar(corrente)}</>;
+}
+
 export function CardKpi({
   rotulo,
   valor,
+  contar,
   metrica,
   sufixo,
   textura = "texture.contour",
@@ -46,6 +69,17 @@ export function CardKpi({
   rotulo: string;
   /** Já formatado. O card não formata — quem sabe a unidade é o módulo. */
   valor: string;
+  /**
+   * Para o número SUBIR até o valor em vez de aparecer pronto.
+   *
+   * Vem separado do `valor` porque o card não sabe formatar: quem conhece a
+   * unidade é o módulo. Então ele passa o número cru e a mesma função que usou
+   * para gerar a string — e a contagem reaproveita as duas.
+   *
+   * Sem os dois, o card mostra `valor` direto. É o caminho de quem não quer
+   * animação e o de quem exibe algo que não é número ("Alta", "12ª de 645").
+   */
+  contar?: { de: number; formatar: (v: number) => string };
   /** Traz a procedência e a fonte para a etiqueta do rodapé. */
   metrica?: Metrica;
   sufixo?: ReactNode;
@@ -90,7 +124,7 @@ export function CardKpi({
         <Row gap={3} justify="between" align="end">
           <Row gap={2} align="baseline" wrap css={{ minWidth: 0 }}>
             <Figura size={destaque ? "xl" : "lg"} tone={destaque ? "accent" : "primary"}>
-              {valor}
+              <ValorAnimado valor={valor} contar={contar} />
             </Figura>
             {sufixo}
           </Row>

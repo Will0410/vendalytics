@@ -189,6 +189,7 @@ export function Ecossistema() {
         <CardKpi
           rotulo="Praças sem a atividade"
           valor={num(prontos.length)}
+          contar={{ de: prontos.length, formatar: num }}
           nota={`${num(jaTem)} já têm vantagem comparativa`}
         />
         <CardKpi
