@@ -141,25 +141,27 @@ export function VaziosDeMercado() {
     );
   }
 
-  const { vazios, amostra, r2, coeficientes } = resultado;
+  const { vazios, amostra, r2, coeficientes, conformal, sustentaveis } = resultado;
 
   /**
-   * Duas ordens diferentes resolvem duas perguntas diferentes, e usar a errada
-   * esvazia o módulo.
+   * Quem entra no ranking: só quem tem lacuna SUSTENTÁVEL.
    *
-   * `vazios` vem ordenado pelo RESÍDUO — a lacuna relativa. É a medida que foi
-   * validada contra crescimento futuro, mas ordenar por ela sozinha entrega o
-   * ranking a municípios minúsculos: Santana do Mundaú/AL, com 6 mil
-   * habitantes, tem resíduo extremo porque lhe faltam 8 comércios. É verdade
-   * estatística e é inútil como rota de vendedor.
+   * O critério não é mais o percentil do resíduo — aquilo era um corte
+   * arbitrário meu, e um município no percentil 76 não é materialmente
+   * diferente de um no 74. O corte agora é o intervalo conformal: entra quem
+   * está abaixo do PISO do próprio intervalo de 90%, ou seja, quem o modelo
+   * não consegue explicar como "está dentro do previsto".
    *
-   * Então: o resíduo QUALIFICA (só entra quem está no quartil superior de
-   * desabastecimento) e a lacuna absoluta ORDENA (quem entra, aparece pelo
-   * tamanho do prêmio). Nenhuma das duas sozinha serve.
+   * Isso encolhe muito a lista — na amostra de validação, de 4.979 para ~330 —
+   * e é o número honesto. Um modelo que explica ~5% da variação do crescimento
+   * não tem direito de afirmar lacuna em milhares de lugares.
+   *
+   * Entre os que entram, a lacuna absoluta ORDENA: o resíduo sozinho entregava
+   * o topo a Santana do Mundaú/AL, 6 mil habitantes, faltando 8 comércios —
+   * verdade estatística, inútil como rota de vendedor.
    */
-  const QUALIFICACAO = 75;
   const maioresLacunas = vazios
-    .filter((v) => v.percentil >= QUALIFICACAO)
+    .filter((v) => v.sustentavel)
     .sort((a, b) => b.lacuna - a.lacuna)
     .slice(0, NO_RANKING);
 
@@ -196,9 +198,10 @@ export function VaziosDeMercado() {
 
       <Grid cols="4">
         <CardKpi
-          rotulo="Municípios no modelo"
-          valor={num(amostra)}
-          nota="com 20+ empresas do setor"
+          rotulo="Lacunas sustentáveis"
+          valor={num(sustentaveis)}
+          nota={`de ${num(amostra)} municípios — o resto cabe no intervalo`}
+          destaque
         />
         <CardKpi
           rotulo="Explicação do modelo"
@@ -211,9 +214,9 @@ export function VaziosDeMercado() {
           nota="1,0 = empresas crescem junto com gente"
         />
         <CardKpi
-          rotulo="Elasticidade do poder de compra"
-          valor={coeficientes.poderDeCompra.toFixed(2)}
-          nota="é o que separa pobreza de oportunidade"
+          rotulo="Cobertura do intervalo"
+          valor={conformal ? `${(conformal.cobertura * 100).toFixed(0)}%` : "—"}
+          nota={conformal ? `calibrado em ${num(conformal.n)} municípios` : "amostra insuficiente"}
         />
       </Grid>
 
@@ -256,7 +259,7 @@ export function VaziosDeMercado() {
 
       <Secao
         titulo="Onde ir primeiro"
-        descricao={`Quartil mais desabastecido (percentil ${QUALIFICACAO}+), ordenado pelo tamanho da lacuna`}
+        descricao="Só municípios abaixo do piso do próprio intervalo de 90% — ordenados pelo tamanho da lacuna"
       >
         <TabelaWrap>
           <Tabela>
@@ -266,6 +269,7 @@ export function VaziosDeMercado() {
                 <Th>UF</Th>
                 <Th alinhamento="direita">Hoje</Th>
                 <Th alinhamento="direita">Esperado</Th>
+                <Th alinhamento="direita">Intervalo 90%</Th>
                 <Th alinhamento="direita">Lacuna</Th>
                 <Th alinhamento="direita">População</Th>
                 <Th alinhamento="direita">PIB per capita</Th>
@@ -281,6 +285,13 @@ export function VaziosDeMercado() {
                     <Td>{p?.uf ?? "—"}</Td>
                     <Td alinhamento="direita">{num(Math.round(v.observado))}</Td>
                     <Td alinhamento="direita">{num(Math.round(v.esperado))}</Td>
+                    <Td alinhamento="direita">
+                      <Text size="xs" tone="muted" mono>
+                        {v.esperadoMin == null
+                          ? "—"
+                          : `${numCompacto(v.esperadoMin)}–${numCompacto(v.esperadoMax as number)}`}
+                      </Text>
+                    </Td>
                     <Td alinhamento="direita">
                       <strong>+{num(Math.round(v.lacuna))}</strong>
                     </Td>
@@ -375,9 +386,28 @@ function ComoLer() {
         </Text>
         <Text size="sm" tone="muted">
           <strong>O que isso não permite:</strong> prever um município específico. ρ =
-          −0,23 explica cerca de 5% da variação. Isto ordena 5.570 praças; não afirma o
-          que vai acontecer em uma delas. Serve para decidir a sequência da rota, não
-          para substituir a visita.
+          −0,23 explica cerca de 5% da variação. Isto ordena praças; não afirma o que vai
+          acontecer em uma delas. Serve para decidir a sequência da rota, não para
+          substituir a visita.
+        </Text>
+        <Heading size="md" css={{ marginTop: "$3" }}>Por que a lista é curta</Heading>
+        <Text size="sm">
+          Cada município recebe um <strong>intervalo com cobertura garantida</strong>
+          {" "}(predição conformal): se pedimos 90%, ao menos 90% dos casos caem dentro —
+          e isso foi <strong>medido</strong>, não suposto. Na amostra de validação, a
+          cobertura empírica saiu em 89,8% para um nominal de 90%.
+        </Text>
+        <Text size="sm">
+          A regra de corte vem daí, e não de um limiar escolhido a dedo:{" "}
+          <strong>se o observado cabe dentro do intervalo, não há como afirmar que falta
+          empresa</strong> — o município está dentro do que o modelo consegue prever. Só
+          entra no ranking quem fica abaixo do piso do próprio intervalo.
+        </Text>
+        <Text size="sm" tone="muted">
+          Isso descarta cerca de 90% dos municípios, e é o número honesto. A banda de 90%
+          equivale a um fator de aproximadamente 2 para cada lado; com um intervalo
+          desses, afirmar lacuna para quem está perto do esperado seria inventar
+          precisão que o modelo não tem.
         </Text>
       </Stack>
     </Card>

@@ -74,6 +74,8 @@
  * nenhuma — três números por município bastam.
  */
 
+import { calibrar, intervalo, type Conformal, type Ponto } from "./conformal";
+
 /** Seções CNAE em que o indicador foi validado fora da amostra. */
 export const SETORES_VALIDADOS: readonly string[] = ["G", "C"];
 
@@ -129,6 +131,21 @@ export interface Vazio {
   residuo: number;
   /** 0–100. Quanto MAIOR, mais desabastecido em relação aos demais. */
   percentil: number;
+  /** Piso do intervalo de 90% para o esperado. `null` sem calibração. */
+  esperadoMin: number | null;
+  /** Teto do intervalo de 90% para o esperado. */
+  esperadoMax: number | null;
+  /**
+   * A lacuna se sustenta? Verdadeiro só quando o observado fica ABAIXO do piso
+   * do intervalo — ou seja, quando o município não pode ser explicado como
+   * "está dentro do que o modelo consegue prever".
+   *
+   * Medido na amostra de validação: 89,8% dos municípios caem DENTRO do
+   * intervalo e 6,6% ficam abaixo do piso. O produto ranqueia esses 6,6%.
+   * Parece pouco e é o número honesto — um modelo que explica ~5% da variação
+   * do crescimento não tem direito de afirmar lacuna em 5.570 lugares.
+   */
+  sustentavel: boolean;
 }
 
 export interface ResultadoVazios {
@@ -145,6 +162,10 @@ export interface ResultadoVazios {
    * economia do problema não sustenta, e é para aparecer.
    */
   coeficientes: { populacao: number; poderDeCompra: number };
+  /** Calibração conformal, ou `null` quando a amostra não a sustenta. */
+  conformal: Conformal | null;
+  /** Quantos municípios têm lacuna sustentável — os únicos que o produto afirma. */
+  sustentaveis: number;
 }
 
 /* ─── Mínimos quadrados ────────────────────────────────────────────────── */
@@ -224,6 +245,8 @@ const VAZIO: ResultadoVazios = {
   amostra: 0,
   r2: 0,
   coeficientes: { populacao: 0, poderDeCompra: 0 },
+  conformal: null,
+  sustentaveis: 0,
 };
 
 /**
@@ -264,18 +287,45 @@ export function mapearVazios(entradas: EntradaVazio[]): ResultadoVazios {
   const { beta, r2 } = ols(X, y);
   if (!Number.isFinite(r2) || r2 <= 0) return { ...VAZIO, porId: new Map() };
 
+  /* Intervalo com cobertura garantida sobre o mesmo ajuste. A calibração usa
+     uma fatia que o ajuste do intervalo não vê — ver `conformal.ts`. Devolve
+     `null` quando a amostra não sustenta o quantil, e nesse caso o produto
+     simplesmente não afirma nada sobre lacuna. */
+  const pontos: Ponto[] = X.map((x, i) => ({ x, y: y[i] as number }));
+  const cal = calibrar(pontos);
+
+  let sustentaveis = 0;
   const vazios: Vazio[] = usaveis.map((e, i) => {
     const linha = X[i] as number[];
     let previsto = 0;
     for (let j = 0; j < beta.length; j++) previsto += (beta[j] ?? 0) * (linha[j] ?? 0);
     const esperado = Math.exp(previsto);
+    const observado = e.empresas as number;
+
+    let esperadoMin: number | null = null;
+    let esperadoMax: number | null = null;
+    let sustentavel = false;
+    if (cal) {
+      const iv = intervalo(cal, linha, previsto);
+      esperadoMin = Math.exp(iv.baixo);
+      esperadoMax = Math.exp(iv.alto);
+      /* A regra não é limiar de largura, é a própria pergunta do produto:
+         se o observado cabe no intervalo, não há como afirmar que falta
+         empresa aqui. */
+      sustentavel = observado < esperadoMin;
+      if (sustentavel) sustentaveis++;
+    }
+
     return {
       id: e.id,
       esperado,
-      observado: e.empresas as number,
-      lacuna: esperado - (e.empresas as number),
+      observado,
+      lacuna: esperado - observado,
       residuo: (y[i] as number) - previsto,
       percentil: 0,
+      esperadoMin,
+      esperadoMax,
+      sustentavel,
     };
   });
 
@@ -299,5 +349,7 @@ export function mapearVazios(entradas: EntradaVazio[]): ResultadoVazios {
     amostra: n,
     r2,
     coeficientes: { populacao: beta[1] ?? 0, poderDeCompra: beta[2] ?? 0 },
+    conformal: cal,
+    sustentaveis,
   };
 }

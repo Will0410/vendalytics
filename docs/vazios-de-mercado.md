@@ -165,6 +165,52 @@ pior que explicação nenhuma.
 Efeito colateral bom: sem gravidade, o modelo não precisa de coordenada nenhuma.
 Três números por município bastam.
 
+## Intervalo com cobertura garantida, e o direito de calar
+
+O modelo devolvia estimativa pontual — "esperado 115.930". Um ponto não diz se
+o modelo está confortável ali ou chutando, e essas duas situações não podem ter
+a mesma cara na tela.
+
+**Predição conformal normalizada** resolve isso: separa uma fatia de calibração
+que o ajuste não vê, mede o erro nela, e o quantil vira a meia-largura. A
+garantia é *distribution-free* e vale em amostra finita.
+
+Cobertura medida sobre os mesmos 4.979 municípios:
+
+| Nominal | Empírica |
+|---|---|
+| 80% | 80,3% |
+| 90% | **89,8%** |
+| 95% | 95,0% |
+| 99% | 99,1% |
+
+A calibração é normalizada por uma estimativa de dificuldade local — um segundo
+ajuste sobre o tamanho do próprio erro. Sem isso o intervalo teria largura
+constante, o que é válido e inútil: a abstenção viraria tudo-ou-nada.
+
+### A regra de abstenção
+
+Não é limiar de largura escolhido a dedo. É a própria pergunta do produto:
+
+> Se o intervalo do **esperado** contém o **observado**, não há como afirmar que
+> falta empresa. O município está dentro do que o modelo consegue prever.
+
+Consequência medida:
+
+```
+89,8% caem DENTRO do intervalo   -> o produto não afirma nada
+ 6,6% ficam abaixo do piso       -> lacuna sustentável
+```
+
+**O ranking encolhe de 4.979 para cerca de 330 municípios.** É o número
+honesto, e é coerente com o ρ = −0,232 que já estava publicado: um modelo que
+explica ~5% da variação do crescimento não tem direito de afirmar lacuna em
+milhares de lugares. A banda de 90% equivale a um fator de ~2 para cada lado.
+
+Isso substituiu um corte arbitrário anterior — "percentil 75 ou mais" —, que
+tratava o município no percentil 76 como diferente do 74 sem nada que
+sustentasse a fronteira.
+
 ## Como ler o resultado
 
 **O que permite:** priorizar. Ordenar 5.570 praças por onde a chance de
